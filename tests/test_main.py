@@ -5,8 +5,8 @@ import logging
 from io import StringIO
 from unittest import TestCase
 
-from fillname.utils.logger import setup_logger
-from fillname.utils.parser import get_parser
+from ucorexplain.utils.logger import setup_logger
+from ucorexplain.utils.parser import get_parser
 
 
 class TestMain(TestCase):
