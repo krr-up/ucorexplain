@@ -1,0 +1,73 @@
+name: CI Test for ucorexplain
+
+on: [push]
+
+jobs:
+  build-linux:
+    name: Test ucorexplain Linux
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9"]
+    steps:
+      - name: Checkout code into workspace directory
+        uses: actions/checkout@v2
+      - name: Setup conda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          environment-file: environment.yml
+          activate-environment: ucorexplain
+      - name: Run tests
+        run: |
+          conda init bash
+          source ~/.bashrc
+          conda activate ucorexplain
+          pytest -v ./tests/test.py
+
+  build-macos:
+    name: Test ucorexplain Macos
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: ["3.9"]
+    steps:
+      - name: Checkout code into workspace directory
+        uses: actions/checkout@v2
+      - name: Setup conda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          environment-file: environment.yml
+          activate-environment: ucorexplain
+      - name: Run tests
+        run: |
+          conda init bash
+          source /Users/runner/.bash_profile
+          conda activate ucorexplain
+          pytest -v ./tests/test.py
+
+  build-windows:
+    name: Test ucorexplain Windows
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: ["3.9"]
+    steps:
+      - name: Checkout code into workspace directory
+        uses: actions/checkout@v2
+      - name: Setup conda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          environment-file: environment.yml
+          activate-environment: ucorexplain
+      - name: Run tests
+        run: |
+          conda init bash
+          eval "$(conda shell.bash hook)"
+          conda activate ucorexplain
+          pytest -v ./tests/test.py
