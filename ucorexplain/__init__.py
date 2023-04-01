@@ -90,9 +90,7 @@ def check(
                   on_core=on_core)
 
     if on_core.res and on_core.res[-1] != -1:
-        return with_selectors
-        # can we drop to the core of clingo without breaking the priority?
-        # return [literal_to_selector[literal] for literal in on_core.res]
+        return [literal_to_selector[literal] for literal in on_core.res]
 
 
 @typeguard.typechecked
@@ -128,23 +126,20 @@ def explain(
         required_selectors = 0
 
         while required_selectors < len(selectors):
-            console.log(f"Check with {len(selectors) - 1} selectors "
-                        f"(try to remove {len(selectors) - required_selectors - 1}) ...")
+            console.log(f"Flag {selectors[-1]} as required!")
+            required_selectors += 1
+            selectors.insert(0, selectors.pop())  # last selector is required... move it ahead
+            console.log(f"Check with {len(selectors)} selectors...")
             result = check(
                 control=control,
-                with_selectors=[selector for index, selector in enumerate(selectors)
-                                if index != len(selectors) - required_selectors - 1],
+                with_selectors=selectors,
                 literal_to_selector=literal_to_selector,
                 selector_to_literal=selector_to_literal
             )
-            if result is None:
-                console.log(f"  Flag {selectors[-1 - required_selectors]} as required!")
-                progress.update(task, advance=1)
-                required_selectors += 1
-            else:
-                console.log(f"  Shrink to {len(result)} selectors!")
-                progress.update(task, advance=len(selectors) - len(result))
-                selectors = result
+            assert result is not None
+            console.log(f"  Shrink to {len(result)} selectors!")
+            progress.update(task, advance=len(selectors) - len(result))
+            selectors = result
 
     console.log(f"Terminate with {len(selectors)} selectors!")
     return [
