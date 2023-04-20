@@ -26,16 +26,14 @@ def priority_list_to_constraints(
     for index, atom in enumerate(priority_list):
         if atom == query_atom:
             if atom in answer_set:
-                constraints.append(f":- %* explain truth of {atom} *%  {atom}.")
+                constraints.append(f":- {atom}. %Query")
             else:
-                constraints.append(f":- %* explain falsity of {atom} *%  not {atom}.")
+                constraints.append(f":- not {atom}. %Query")
         else:
             if atom in answer_set:
-                constraints.append(f":- %* enforce truth of   {atom} (it belongs to the answer set)        *%  "
-                                   f"not  {atom}, {mus_predicate}(priority_list,{index}).")
+                constraints.append(f":-not  {atom}, {mus_predicate}(priority_list,{index}). %Answer set")
             else:
-                constraints.append(f":- %* enforce falsity of {atom} (it doesn't belong to the answer set) *%  "
-                                   f"     {atom}, {mus_predicate}(priority_list,{index}).")
+                constraints.append(f":-  {atom}, {mus_predicate}(priority_list,{index}). %Answer set")
 
     return [SymbolicRule.parse(constraint) for constraint in constraints]
 
@@ -49,14 +47,17 @@ def build_extended_program_and_selectors(
 ) -> tuple[SymbolicProgram, list[GroundAtom]]:
     rules = [rule.with_extended_body(SymbolicAtom.parse(f"{mus_predicate}(program,{index})"))
              for index, rule in enumerate(program)]
+
     constraints = priority_list_to_constraints(answer_set, query_atom, priority_list, mus_predicate)
-    return SymbolicProgram.of(rules, constraints, SymbolicRule.parse(
+    extended_program = SymbolicProgram.of(rules, constraints, SymbolicRule.parse(
         "{" +
         f"{mus_predicate}(program,0..{len(rules) - 1}); "
         f"{mus_predicate}(priority_list,0..{len(constraints) - 1})" +
         "}."
-    )), [GroundAtom.parse(f"{mus_predicate}(program,{index})") for index in range(len(rules))] + \
+    ))
+    selectors = [GroundAtom.parse(f"{mus_predicate}(program,{index})") for index in range(len(rules))] + \
         [GroundAtom.parse(f"{mus_predicate}(priority_list,{index})") for index in range(len(constraints))]
+    return extended_program, selectors
 
 
 def build_control_and_maps(
@@ -105,6 +106,11 @@ def explain(
     extended_program, selectors = build_extended_program_and_selectors(
         program, answer_set, query_atom, priority_list, mus_predicate
     )
+    console.print("[bold blue]-----------------[/bold blue]")
+    console.print(f"[bold blue]Extended program:[/bold blue]")
+    for line in extended_program:
+        console.print(f"{line}")
+    console.print("[bold blue]-----------------[/bold blue]")
 
     control, selector_to_literal, literal_to_selector = build_control_and_maps(extended_program, mus_predicate)
 
