@@ -1,4 +1,4 @@
-name: ucorexplain
+name: ucorexplain2
 channels:
   - potassco
   - conda-forge
@@ -6,5 +6,6 @@ channels:
 dependencies:
   - clingo=5.6
   - pytest
-  - typeguard
-  - dumbo-asp
+  - pip:
+    - typeguard
+    - dumbo-asp
