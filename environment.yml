@@ -6,3 +6,5 @@ channels:
 dependencies:
   - clingo=5.6
   - pytest
+  - typeguard
+  - dumbo-asp
