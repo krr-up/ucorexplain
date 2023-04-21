@@ -22,7 +22,7 @@ ucorexplain -h
 Run tests using `pytest`
 
 ```shell
-$ pytest -v ucorexplain/tests
+$ pytest -v tests
 ```
 
 Add flag `-s` to show print statements in the code
