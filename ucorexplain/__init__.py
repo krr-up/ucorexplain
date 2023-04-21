@@ -3,60 +3,71 @@ UCOREXPLAIN
 """
 
 
-from typing import Final, Optional
+from typing import Final, Optional, Union
 
 import clingo
 import typeguard
+from dumbo_asp.primitives import SymbolicAtom, SymbolicRule, SymbolicProgram, Model, GroundAtom
 from dumbo_utils.console import console
 from rich.progress import Progress
 
-from dumbo_asp.primitives import SymbolicAtom, SymbolicRule, SymbolicProgram, Model, GroundAtom
+AnswerSetElement = Union[GroundAtom, tuple[GroundAtom, bool]]
+AnswerSet = tuple[AnswerSetElement, ...]
 
 
-def priority_list_to_constraints(
-        answer_set: Model,
+def unpack_answer_set_element(element: AnswerSetElement) -> tuple[GroundAtom, bool]:
+    if type(element) != GroundAtom:
+        return element
+    return element, True
+
+
+def move_up(answer_set: AnswerSet, *pattern: SymbolicAtom) -> AnswerSet:
+    def key(element):
+        atom, truth_value = unpack_answer_set_element(element)
+        return 0 if SymbolicAtom.of_ground_atom(atom).match(*pattern) else 1
+
+    return tuple(sorted(answer_set, key=key))
+
+
+def answer_set_to_constraints(
+        answer_set: AnswerSet,
         query_atom: GroundAtom,
-        priority_list: tuple[GroundAtom, ...],
         mus_predicate: str
 ) -> list[SymbolicRule]:
     """
     Produces the sequence of selecting constraints.
     """
     constraints = []
-    for index, atom in enumerate(priority_list):
+    for index, element in enumerate(answer_set):
+        atom, truth_value = unpack_answer_set_element(element)
         if atom == query_atom:
-            if atom in answer_set:
-                constraints.append(f":-     {atom}. %Query")
-            else:
-                constraints.append(f":- not {atom}. %Query")
+            constraints.append(f":- {'' if truth_value else 'not'} {atom}.  % Query")
         else:
-            if atom in answer_set:
-                constraints.append(f":- not {atom}, {mus_predicate}(priority_list,{index}). %Answer set")
-            else:
-                constraints.append(f":-     {atom}, {mus_predicate}(priority_list,{index}). %Answer set")
+            constraints.append(
+                f":- {'not' if truth_value else ''} {atom}, {mus_predicate}(answer_set,{index}).  % Answer set"
+            )
 
     return [SymbolicRule.parse(constraint) for constraint in constraints]
 
 
 def build_extended_program_and_selectors(
         program: SymbolicProgram,
-        answer_set: Model,
+        answer_set: AnswerSet,
         query_atom: GroundAtom,
-        priority_list: tuple[GroundAtom, ...],
         mus_predicate: str
 ) -> tuple[SymbolicProgram, list[GroundAtom]]:
     rules = [rule.with_extended_body(SymbolicAtom.parse(f"{mus_predicate}(program,{index})"))
              for index, rule in enumerate(program)]
 
-    constraints = priority_list_to_constraints(answer_set, query_atom, priority_list, mus_predicate)
+    constraints = answer_set_to_constraints(answer_set, query_atom, mus_predicate)
     extended_program = SymbolicProgram.of(rules, constraints, SymbolicRule.parse(
         "{" +
         f"{mus_predicate}(program,0..{len(rules) - 1}); "
-        f"{mus_predicate}(priority_list,0..{len(constraints) - 1})" +
+        f"{mus_predicate}(answer_set,0..{len(constraints) - 1})" +
         "}."
     ))
     selectors = [GroundAtom.parse(f"{mus_predicate}(program,{index})") for index in range(len(rules))] + \
-        [GroundAtom.parse(f"{mus_predicate}(priority_list,{index})") for index in range(len(constraints))]
+        [GroundAtom.parse(f"{mus_predicate}(answer_set,{index})") for index in range(len(constraints))]
     return extended_program, selectors
 
 
@@ -97,14 +108,13 @@ def check(
 @typeguard.typechecked
 def explain(
     program: SymbolicProgram,
-    answer_set: Model,
+    answer_set: AnswerSet,
     query_atom: GroundAtom,
-    priority_list: tuple[GroundAtom, ...],
 ) -> Optional[SymbolicProgram]:
     mus_predicate: Final = f"__mus__"
 
     extended_program, selectors = build_extended_program_and_selectors(
-        program, answer_set, query_atom, priority_list, mus_predicate
+        program, answer_set, query_atom, mus_predicate
     )
     console.print("[bold blue]-----------------[/bold blue]")
     console.print(f"[bold blue]Extended program:[/bold blue]")
@@ -148,11 +158,10 @@ def explain(
             selectors = result
 
     console.log(f"Terminate with {len(selectors)} selectors!")
-    # return SymbolicProgram.of(*extended_program, *(SymbolicRule.parse(f"{selector}.") for selector in selectors))
 
     def selector_to_rule(selector):
         return program[selector.arguments[1].number] if selector.arguments[0].name == 'program' else \
-            priority_list[selector.arguments[1].number]
+            answer_set[selector.arguments[1].number]
 
     selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(selector)} *%" for selector in selectors)
     return SymbolicProgram.parse(f"{extended_program}\n\n{selectors_program}")

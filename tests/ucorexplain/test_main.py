@@ -22,14 +22,11 @@ class TestMain(TestCase):
         {c}.
         """)
         query_atom = GroundAtom.parse("c")
-        answer_set = Model.of_program("c.")
+        answer_set = tuple(Model.of_program("c."))
         result = explain(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
-            priority_list=tuple(GroundAtom.parse(atom) for atom in [
-                "c",
-            ]),
         )
         self.assertIsNone(result)
 
@@ -40,18 +37,13 @@ class TestMain(TestCase):
         b :- c.
         """)
         query_atom = GroundAtom.parse("c")
-        answer_set = Model.of_program("a. b. c.")
+        answer_set = tuple(Model.of_program("a. b. c."))
         result = explain(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
-            priority_list=tuple(GroundAtom.parse(atom) for atom in [
-                "a",
-                "b",
-                "c",
-            ]),
         )
-        self.assert_explain_suffix(result, "__mus__(priority_list,1).  %* b *%")
+        self.assert_explain_suffix(result, "__mus__(answer_set,1).  %* b *%")
 
     def test_subprogram_selecting_choice(self):
         program = SymbolicProgram.parse("""
@@ -60,15 +52,11 @@ class TestMain(TestCase):
         b:-not a.
         """)
         query_atom = GroundAtom.parse("b")
-        answer_set = Model.of_program("a. b.")
+        answer_set = tuple(Model.of_program("a. b."))
         result = explain(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
-            priority_list=tuple(GroundAtom.parse(atom) for atom in [
-                "a",
-                "b",
-            ]),
         )
         self.assert_explain_suffix(result, """
 __mus__(program,0).  %* 1{a}. *%
@@ -83,22 +71,16 @@ __mus__(program,1).  %* b:-a. *%
         b:-d.
         """)
         query_atom = GroundAtom.parse("b")
-        answer_set = Model.of_program("a. b. c. d.")
+        answer_set = tuple(Model.of_program("a. b. c. d."))
         result = explain(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
-            priority_list=tuple(GroundAtom.parse(atom) for atom in [
-                "a",
-                "b",
-                "c",
-                "d",
-            ]),
         )
         self.assert_explain_suffix(result, """
 __mus__(program,2).  %* d:-c. *%
 __mus__(program,3).  %* b:-d. *%
-__mus__(priority_list,2).  %* c *%
+__mus__(answer_set,2).  %* c *%
         """)
 
     def test_subprogram_simple_d_first(self):
@@ -109,21 +91,13 @@ __mus__(priority_list,2).  %* c *%
         b:-d.
         """)
         query_atom = GroundAtom.parse("b")
-        answer_set = Model.of_program("a. b. c. d.")
+        answer_set = tuple(GroundAtom.parse(atom) for atom in "a b d c".split())
         result = explain(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
-            priority_list=tuple(GroundAtom.parse(atom) for atom in [
-                "a",
-                "b",
-                "d",
-                "c",
-            ]),
         )
         self.assert_explain_suffix(result, """
 __mus__(program,3).  %* b:-d. *%
-__mus__(priority_list,2).  %* d *%
+__mus__(answer_set,2).  %* d *%
         """)
-
-        # Would like to use rules before priority list right? YES
