@@ -101,3 +101,17 @@ __mus__(answer_set,2).  %* c *%
 __mus__(program,3).  %* b:-d. *%
 __mus__(answer_set,2).  %* d *%
         """)
+
+    def test_multiple_atoms_can_be_free_choices(self):
+        program = SymbolicProgram.parse("""
+        {a}.
+        b :- a.
+        """)
+        query_atom = tuple(GroundAtom.parse(atom) for atom in "a b".split())
+        answer_set = tuple(GroundAtom.parse(atom) for atom in "a b".split())
+        result = explain(
+            program=program,
+            answer_set=answer_set,
+            query_atom=query_atom,
+        )
+        assert result is None

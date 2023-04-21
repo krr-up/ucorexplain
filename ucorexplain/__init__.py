@@ -31,16 +31,19 @@ def move_up(answer_set: AnswerSet, *pattern: SymbolicAtom) -> AnswerSet:
 
 def answer_set_to_constraints(
         answer_set: AnswerSet,
-        query_atom: GroundAtom,
+        query_atom: GroundAtom | tuple[GroundAtom, ...],
         mus_predicate: str
 ) -> list[SymbolicRule]:
     """
     Produces the sequence of selecting constraints.
     """
+    if type(query_atom) == GroundAtom:
+        query_atom = (query_atom,)
+    query_atoms = set(query_atom)
     constraints = []
     for index, element in enumerate(answer_set):
         atom, truth_value = unpack_answer_set_element(element)
-        if atom == query_atom:
+        if atom in query_atoms:
             constraints.append(f":- {'' if truth_value else 'not'} {atom}.  % Query")
         else:
             constraints.append(
@@ -53,7 +56,7 @@ def answer_set_to_constraints(
 def build_extended_program_and_selectors(
         program: SymbolicProgram,
         answer_set: AnswerSet,
-        query_atom: GroundAtom,
+        query_atom: GroundAtom | tuple[GroundAtom, ...],
         mus_predicate: str
 ) -> tuple[SymbolicProgram, list[GroundAtom]]:
     rules = [rule.with_extended_body(SymbolicAtom.parse(f"{mus_predicate}(program,{index})"))
@@ -109,7 +112,7 @@ def check(
 def explain(
     program: SymbolicProgram,
     answer_set: AnswerSet,
-    query_atom: GroundAtom,
+    query_atom: GroundAtom | tuple[GroundAtom, ...],
 ) -> Optional[SymbolicProgram]:
     mus_predicate: Final = f"__mus__"
 
