@@ -13,6 +13,10 @@ class TestMain(TestCase):
     Test cases for explain
     """
 
+    @staticmethod
+    def assert_explain_suffix(program: SymbolicProgram, suffix: str):
+        assert str(program).strip().endswith('\n' + suffix.strip())
+
     def test_subprogram_free_choice(self):
         program = SymbolicProgram.parse("""
         {c}.
@@ -47,9 +51,7 @@ class TestMain(TestCase):
                 "c",
             ]),
         )
-        result_prg = [str(rule) for rule in result]
-        self.assertEqual(result_prg[0], 'b')
-        assert False
+        self.assert_explain_suffix(result, "__mus__(priority_list,1).  %* b *%")
 
     def test_subprogram_selecting_choice(self):
         program = SymbolicProgram.parse("""
@@ -68,8 +70,10 @@ class TestMain(TestCase):
                 "b",
             ]),
         )
-        result_prg = [str(rule) for rule in result]
-        self.assertIn('1{a}.',result_prg)
+        self.assert_explain_suffix(result, """
+__mus__(program,0).  %* 1{a}. *%
+__mus__(program,1).  %* b:-a. *%
+        """)
 
     def test_subprogram_simple(self):
         program = SymbolicProgram.parse("""
@@ -91,8 +95,11 @@ class TestMain(TestCase):
                 "d",
             ]),
         )
-        result_prg = [str(rule) for rule in result]
-        self.assertEqual(result_prg[-1],'c')
+        self.assert_explain_suffix(result, """
+__mus__(program,2).  %* d:-c. *%
+__mus__(program,3).  %* b:-d. *%
+__mus__(priority_list,2).  %* c *%
+        """)
 
     def test_subprogram_simple_d_first(self):
         program = SymbolicProgram.parse("""
@@ -114,7 +121,9 @@ class TestMain(TestCase):
                 "c",
             ]),
         )
-        result_prg = [str(rule) for rule in result]
-        self.assertEqual(result_prg[-1], 'd')
+        self.assert_explain_suffix(result, """
+__mus__(program,3).  %* b:-d. *%
+__mus__(priority_list,2).  %* d *%
+        """)
 
-        # Would like to use rules before priority list right?
+        # Would like to use rules before priority list right? YES
