@@ -25,3 +25,5 @@ pip-delete-this-directory.txt
 .dmypy.json
 dmypy.json
 *egg-info*
+
+build/

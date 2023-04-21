@@ -1,15 +1,12 @@
 """
 Test cases for main application functionality.
 """
-import logging
-from io import StringIO
 from unittest import TestCase
 
-from ucorexplain.utils.logger import setup_logger
-from ucorexplain.utils.parser import get_parser
+from dumbo_asp.primitives import SymbolicProgram, Model, GroundAtom
 
-from .. import explain, print_output
-from dumbo_asp.primitives import SymbolicAtom, SymbolicRule, SymbolicProgram, Model, GroundAtom
+from ucorexplain import explain
+
 
 class TestMain(TestCase):
     """
@@ -35,8 +32,8 @@ class TestMain(TestCase):
     def test_subprogram_free(self):
         program = SymbolicProgram.parse("""
         a.
-        {c}:-a.
-        b:-c.
+        {c} :- a.
+        b :- c.
         """)
         query_atom = GroundAtom.parse("c")
         answer_set = Model.of_program("a. b. c.")
@@ -51,8 +48,8 @@ class TestMain(TestCase):
             ]),
         )
         result_prg = [str(rule) for rule in result]
-        self.assertEqual(result_prg[0],'b')
-
+        self.assertEqual(result_prg[0], 'b')
+        assert False
 
     def test_subprogram_selecting_choice(self):
         program = SymbolicProgram.parse("""
@@ -73,7 +70,6 @@ class TestMain(TestCase):
         )
         result_prg = [str(rule) for rule in result]
         self.assertIn('1{a}.',result_prg)
-
 
     def test_subprogram_simple(self):
         program = SymbolicProgram.parse("""
@@ -119,6 +115,6 @@ class TestMain(TestCase):
             ]),
         )
         result_prg = [str(rule) for rule in result]
-        self.assertEqual(result_prg[-1],'d')
+        self.assertEqual(result_prg[-1], 'd')
 
         # Would like to use rules before priority list right?

@@ -26,14 +26,14 @@ def priority_list_to_constraints(
     for index, atom in enumerate(priority_list):
         if atom == query_atom:
             if atom in answer_set:
-                constraints.append(f":- {atom}. %Query")
+                constraints.append(f":-     {atom}. %Query")
             else:
                 constraints.append(f":- not {atom}. %Query")
         else:
             if atom in answer_set:
-                constraints.append(f":-not  {atom}, {mus_predicate}(priority_list,{index}). %Answer set")
+                constraints.append(f":- not {atom}, {mus_predicate}(priority_list,{index}). %Answer set")
             else:
-                constraints.append(f":-  {atom}, {mus_predicate}(priority_list,{index}). %Answer set")
+                constraints.append(f":-     {atom}, {mus_predicate}(priority_list,{index}). %Answer set")
 
     return [SymbolicRule.parse(constraint) for constraint in constraints]
 
@@ -100,7 +100,7 @@ def explain(
     answer_set: Model,
     query_atom: GroundAtom,
     priority_list: tuple[GroundAtom, ...],
-):
+) -> Optional[SymbolicProgram]:
     mus_predicate: Final = f"__mus__"
 
     extended_program, selectors = build_extended_program_and_selectors(
@@ -114,7 +114,7 @@ def explain(
 
     control, selector_to_literal, literal_to_selector = build_control_and_maps(extended_program, mus_predicate)
 
-    console.log(f"Initial check with {len(selectors)} selectors...")
+    console.log(f"Initial check with {len(selectors) - 1} selectors...")  # selector of the query is always true
     result = check(
         control=control,
         with_selectors=selectors,
@@ -148,25 +148,27 @@ def explain(
             selectors = result
 
     console.log(f"Terminate with {len(selectors)} selectors!")
-    return [
-        program[selector.arguments[1].number] if selector.arguments[0].name == 'program' else
-        priority_list[selector.arguments[1].number]
-        for selector in selectors
-    ]
+    # return SymbolicProgram.of(*extended_program, *(SymbolicRule.parse(f"{selector}.") for selector in selectors))
+
+    def selector_to_rule(selector):
+        return program[selector.arguments[1].number] if selector.arguments[0].name == 'program' else \
+            priority_list[selector.arguments[1].number]
+
+    selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(selector)} *%" for selector in selectors)
+    return SymbolicProgram.parse(f"{extended_program}\n\n{selectors_program}")
 
 
 @typeguard.typechecked
 def print_output(
         query_atom: GroundAtom,
-        result: list[SymbolicRule],
+        result: SymbolicProgram,
 ):
     console.print("[bold red]Explanation:[/bold red]")
     if result is not None:
-        console.print(f"{query_atom} is explained by")
-        for line in result:
-            console.print(f"  {line}")
+        console.print(f"% {query_atom} is explained by")
+        console.print(f"{result}")
     else:
-        console.print(f"{query_atom} is a free choice")
+        console.print(f"% {query_atom} is a free choice")
 
 
 # def print_program(sudoku_instance: str):
