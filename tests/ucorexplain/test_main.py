@@ -1,6 +1,7 @@
 """
 Test cases for main application functionality.
 """
+from typing import Optional
 from unittest import TestCase
 
 from dumbo_asp.primitives import SymbolicProgram, Model, GroundAtom
@@ -14,8 +15,41 @@ class TestMain(TestCase):
     """
 
     @staticmethod
-    def assert_explain_suffix(program: SymbolicProgram, suffix: str):
-        assert str(program).strip().endswith('\n' + suffix.strip())
+    def assert_explain(program: SymbolicProgram, selectors: str):
+        assert str(program).split("%* the selectors causing the inference *%")[1].strip() == \
+               '\n'.join([line.strip() for line in selectors.strip().split('\n')])
+
+    @staticmethod
+    def check_query(program: str, query_atom: str, answer_set: str, selectors: Optional[str]):
+        the_program = SymbolicProgram.parse(program)
+
+        the_answer_set = []
+        if answer_set:
+            for atom in answer_set.split(' '):
+                the_answer_set.append(
+                    (GroundAtom.parse(atom[1:]), False) if atom.startswith('~') else (GroundAtom.parse(atom), True)
+                )
+        # ALL ATOMS THAT ARE NOT MENTIONED IN THE ANSWER SET ARE FALSE.
+        # IF WE WANT THE USER TO SPECIFY ALL ATOMS THAT ARE TRUE, WE CAN MOVE THIS CODE IN THE explain() FUNCTION.
+        atoms_in_the_answer_set = set(element[0] for element in the_answer_set)
+        for atom in the_program.herbrand_base:
+            if atom not in atoms_in_the_answer_set:
+                the_answer_set.append((atom, False))
+
+        explanation = explain(
+            program=the_program,
+            answer_set=tuple(the_answer_set),
+            query_atom=tuple(
+                GroundAtom.parse(atom) for atom in query_atom.split(' ')
+            ),
+        )
+        if explanation is None or selectors is None:
+            assert explanation == selectors
+        else:
+            TestMain.assert_explain(
+                program=explanation,
+                selectors=selectors,
+            )
 
     def test_subprogram_free_choice(self):
         program = SymbolicProgram.parse("""
@@ -30,6 +64,127 @@ class TestMain(TestCase):
         )
         self.assertIsNone(result)
 
+    def test_choice_rule_and_constraint_inference_by_constraint(self):
+        """
+        The choice rule alone doesn't cause the inference of atom c.
+        It is actually the constraint that infers c.
+        """
+        self.check_query(
+            program="""
+            {c}.
+            :- not c.
+            """,
+            query_atom="c",
+            answer_set="c",
+            selectors="""
+            __mus__(program,1).  %* :- not c. *%
+            """
+        )
+
+    def test_well_founded_inference_1(self):
+        """
+        A simple unfounded loop. Falsity of atom a is explained with no selectors: atom a is false wrt. any subprogram.
+        """
+        self.check_query(
+            program="""
+            a :- b.
+            b :- a.
+            """,
+            query_atom="a",
+            answer_set="",
+            selectors="""
+            """
+        )
+
+    def test_well_founded_inference_2(self):
+        """
+        A simple unfounded loop after "guessing" c false: atom a is false wrt. any subprogram if atom c is false.
+        """
+        self.check_query(
+            program="""
+            {c}.
+            a :- c.
+            a :- b.
+            b :- a.
+            """,
+            query_atom="a",
+            answer_set="~c",
+            selectors="""
+            __mus__(answer_set,0).  %* not c *%
+            """
+        )
+
+    def test_well_founded_inference_3(self):
+        """
+        Changing the priority of atoms may give a different explanation.
+        After guessing the falsity of b, atom a is inferred false because of rule  b :- a.
+        """
+        self.check_query(
+            program="""
+            {c}.
+            a :- c.
+            a :- b.
+            b :- a.
+            """,
+            query_atom="a",
+            answer_set="~a ~b ~c",
+            selectors="""
+            __mus__(program,3).  %* b :- a. *%
+            __mus__(answer_set,1).  %* not b *%
+            """
+        )
+
+    def test_simple_loop_with_choice_rule_1(self):
+        """
+        Truth of atom a is inferred after "guessing" b true
+        because b has only one potentially supporting rule whose body containing a (and also a selector literal).
+        """
+        self.check_query(
+            program="""
+            {a}.
+            a :- b.
+            b :- a.
+            """,
+            query_atom="a",
+            answer_set="a b",
+            selectors="""
+            __mus__(answer_set,1).  %* b *%
+            """
+        )
+
+    def test_simple_loop_with_choice_rule_2(self):
+        """
+        Truth of b is inferred after "guessing" a true by the support given by rule  b :- a.
+        """
+        self.check_query(
+            program="""
+            {a}.
+            a :- b.
+            b :- a.
+            """,
+            query_atom="b",
+            answer_set="a b",
+            selectors="""
+            __mus__(program,2).  %* b :- a. *%
+            __mus__(answer_set,0).  %* a *%
+            """
+        )
+
+    def test_simple_loop_with_choice_rule_3(self):
+        """
+        Truth of "a and b" is a free choice, as there is another answer set in which they are false.
+        """
+        self.check_query(
+            program="""
+            {a}.
+            a :- b.
+            b :- a.
+            """,
+            query_atom="a b",
+            answer_set="a b",
+            selectors=None
+        )
+
     def test_subprogram_free(self):
         program = SymbolicProgram.parse("""
         a.
@@ -43,7 +198,7 @@ class TestMain(TestCase):
             answer_set=answer_set,
             query_atom=query_atom,
         )
-        self.assert_explain_suffix(result, "__mus__(answer_set,1).  %* b *%")
+        self.assert_explain(result, "__mus__(answer_set,1).  %* b *%")
 
     def test_subprogram_selecting_choice(self):
         program = SymbolicProgram.parse("""
@@ -58,9 +213,9 @@ class TestMain(TestCase):
             answer_set=answer_set,
             query_atom=query_atom,
         )
-        self.assert_explain_suffix(result, """
-__mus__(program,0).  %* 1{a}. *%
-__mus__(program,1).  %* b:-a. *%
+        self.assert_explain(result, """
+        __mus__(program,0).  %* 1{a}. *%
+        __mus__(program,1).  %* b:-a. *%
         """)
 
     def test_subprogram_simple(self):
@@ -77,10 +232,10 @@ __mus__(program,1).  %* b:-a. *%
             answer_set=answer_set,
             query_atom=query_atom,
         )
-        self.assert_explain_suffix(result, """
-__mus__(program,2).  %* d:-c. *%
-__mus__(program,3).  %* b:-d. *%
-__mus__(answer_set,2).  %* c *%
+        self.assert_explain(result, """
+        __mus__(program,2).  %* d:-c. *%
+        __mus__(program,3).  %* b:-d. *%
+        __mus__(answer_set,2).  %* c *%
         """)
 
     def test_subprogram_simple_d_first(self):
@@ -97,9 +252,9 @@ __mus__(answer_set,2).  %* c *%
             answer_set=answer_set,
             query_atom=query_atom,
         )
-        self.assert_explain_suffix(result, """
-__mus__(program,3).  %* b:-d. *%
-__mus__(answer_set,2).  %* d *%
+        self.assert_explain(result, """
+        __mus__(program,3).  %* b:-d. *%
+        __mus__(answer_set,2).  %* d *%
         """)
 
     def test_multiple_atoms_can_be_free_choices(self):

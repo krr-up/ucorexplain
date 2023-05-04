@@ -21,6 +21,12 @@ def unpack_answer_set_element(element: AnswerSetElement) -> tuple[GroundAtom, bo
     return element, True
 
 
+def answer_set_element_to_string(element: AnswerSetElement) -> str:
+    if type(element) == GroundAtom:
+        element = (element, True)
+    return f"{'' if element[1] else 'not '}{element[0]}"
+
+
 def move_up(answer_set: AnswerSet, *pattern: SymbolicAtom) -> AnswerSet:
     def key(element):
         atom, truth_value = unpack_answer_set_element(element)
@@ -44,11 +50,15 @@ def answer_set_to_constraints(
     for index, element in enumerate(answer_set):
         atom, truth_value = unpack_answer_set_element(element)
         if atom in query_atoms:
-            constraints.append(f":- {'' if truth_value else 'not'} {atom}.  % Query")
+            constraints.append(f":- {answer_set_element_to_string(element)}  %* Query *% .")
+            query_atoms.remove(atom)
         else:
             constraints.append(
-                f":- {'not' if truth_value else ''} {atom}, {mus_predicate}(answer_set,{index}).  % Answer set"
+                f":- not {answer_set_element_to_string(element)}, {mus_predicate}(answer_set,{index})"
+                f"  %* Answer set *% ."
             )
+    for atom in query_atoms:
+        constraints.append(f":- not {atom}  %* Query *% .")
 
     return [SymbolicRule.parse(constraint) for constraint in constraints]
 
@@ -104,7 +114,7 @@ def check(
     control.solve(assumptions=[selector_to_literal[selector] for selector in with_selectors] + [-1],
                   on_core=on_core)
 
-    if on_core.res and on_core.res[-1] != -1:
+    if on_core.res is not None and (len(on_core.res) == 0 or on_core.res[-1] != -1):
         return [literal_to_selector[literal] for literal in on_core.res]
 
 
@@ -164,10 +174,10 @@ def explain(
 
     def selector_to_rule(selector):
         return program[selector.arguments[1].number] if selector.arguments[0].name == 'program' else \
-            answer_set[selector.arguments[1].number]
+            answer_set_element_to_string(answer_set[selector.arguments[1].number])
 
     selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(selector)} *%" for selector in selectors)
-    return SymbolicProgram.parse(f"{extended_program}\n\n{selectors_program}")
+    return SymbolicProgram.parse(f"{extended_program}\n%* the selectors causing the inference *%\n{selectors_program}")
 
 
 @typeguard.typechecked
