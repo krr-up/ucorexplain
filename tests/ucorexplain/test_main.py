@@ -16,11 +16,24 @@ class TestMain(TestCase):
 
     @staticmethod
     def assert_explain(program: SymbolicProgram, selectors: str):
+        print(program)
         assert str(program).split("%* the selectors causing the inference *%")[1].strip() == \
                '\n'.join([line.strip() for line in selectors.strip().split('\n')])
 
     @staticmethod
     def check_query(program: str, query_atom: str, answer_set: str, selectors: Optional[str]):
+        """
+        Check if the query against the program and answer set produces the selectors in answer.
+
+        :param program: The input program, as a string
+        :param query_atom: One or more atoms, as a space-separated list of strings
+        :param answer_set: Zero or more literals, as a space-separated list of strings.
+            False literals starts with ~, and atoms in the Herbrand base of the program
+            not occurring in answer_set are considered false.
+        :param selectors: The selectors that are expected to be responsible for the derivation of the query, or
+            None if the query is expected to be a free choice.
+        :returns: Nothing, but raises an error if the actual outcome doesn't match the expected outcome
+        """
         the_program = SymbolicProgram.parse(program)
 
         the_answer_set = []
@@ -183,6 +196,54 @@ class TestMain(TestCase):
             query_atom="a b",
             answer_set="a b",
             selectors=None
+        )
+
+    def test_inference_by_support(self):
+        self.check_query(
+            program="""
+            a.
+            b :- a.
+            """,
+            query_atom="b",
+            answer_set="a b",
+            selectors="""
+            __mus__(program,0).  %* a. *%
+            __mus__(program,1).  %* b :- a. *%
+            """
+        )
+
+    def test_inference_by_lack_of_support_1(self):
+        """
+        After guessing a false, b has no support and is inferred false.
+        """
+        self.check_query(
+            program="""
+            {a}.
+            b :- a.
+            """,
+            query_atom="b",
+            answer_set="",
+            selectors="""
+            __mus__(answer_set,0).  %* not a *%
+            """
+        )
+
+    def test_inference_by_lack_of_support_2(self):
+        """
+        After guessing a false, b has no support and is inferred false.
+        """
+        self.check_query(
+            program="""
+            {a; a'}.
+            b :- a.
+            b :- a'.
+            """,
+            query_atom="b",
+            answer_set="",
+            selectors="""
+            __mus__(answer_set,0).  %* not a *%
+            __mus__(answer_set,1).  %* not a' *%
+            """
         )
 
     def test_subprogram_free(self):
