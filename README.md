@@ -63,6 +63,36 @@ Based on the Clark Completion
 
         **`~h1 ~h2 b` $\to$ `a`**
 
+
+    *Example*
+
+    - `a :- b1, b2.`
+
+        **Inference: `b1, b2` $\to$ `a`**
+
+        - All nogoods:
+            - $\{ T_{B1}, F_{b1} \}$ $\{ T_{B1}, F_{b2} \}$ $\{ F_{B1}, T_{b1}, T_{b2}\}$
+            - $\{ T_{B1}, F{a}\}$
+
+        - Reason for $a=\top$ : $\{ T_{B1}, F{a}\}$
+
+        Since it has a true body $T_{B1}$ then is a support inference and we need the support for $B1$
+
+        reason for $B1=\top$: $\{ F_{B1}, T_{b1}, T_{b2}\}$
+
+        We put them together and get $\{ F{a}, T_{b1}, T_{b2}\}$
+
+         *"Is true $a$ because $b1$ is true and $b2$ is true. With rule `a :- b1, b2..` doing a support like inference"*
+
+        $G= b1\to a, b2\to a$
+
+    *Nogood*
+
+    - $\{F_a, T_{b1}\}$
+        1. $T_{b1} = true$ $\to$ $T_{a}$
+        2. $F_{a} = true$ $\to$ $F_{b1}$
+
+
 ![Alt text](./img/support.svg)
 
 - **Lack of support**
@@ -89,8 +119,49 @@ Based on the Clark Completion
 
     - `:- a, b1, not b2.`
       **`b1 ~b2` $\to$ `~a`**
+        - $\{T_a,T_{b1},F_{b2}\}$
+        - $b_1=\top$, $b_2=\bot$ $\to a=\bot$
+
+    *Example*
     - `:- not a, b1.`
       **`b1` $\to$ `a`**
+
+    *Example*
+    - `h :- not a, b1.`
+      `h :- c.`
+      **Inference: `b1 ~h` $\to$ `a`**
+      - All nogoods:
+        - $\{T_{B1},T_{a}\}$ $\{T_{B1},F_{b1}\}$ $\{F_{B1},T_{b1},F_{a}\}$*
+        - $\{T_{B2},F_{c}\}$ $\{F_{B2},T_{c}\}$
+        - $\{F_h,T_{B1}\}$
+        - $\{F_h,T_{B2}\}$
+        - $\{T_h,F_{B1},F_{B2}\}$
+
+
+
+    - reason for $a=\top$: $\{F_{B1},T_{b1},F_{a}\}$*
+
+        Since there is a false body $F_{B1}$ in the nogood, then is a constraint like inference to obtain $a$. We then need to get the reason for the body:
+
+        $B1=\bot$
+        $\{F_h,T_{B1}\}$
+        This is internal so is not liked to a rule
+
+        Putting the nogoods together using resolution we get the reasons for $a$
+        $\{F_{h},T_{b1},F_{a}\}$*
+
+        *"Is true $a$ because $h$ is false and $b1$ is true. With rule `h :- not a, b1.` doing a constraint like inference"*
+
+        $G= h\to a, b1\to a$
+
+
+
+
+
+
+
+
+
 
 ![Alt text](./img/constraint_like.svg)
 
