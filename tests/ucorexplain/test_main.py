@@ -143,7 +143,7 @@ class TestMain(TestCase):
             answer_set="~a ~b ~c",
             selectors="""
             __mus__(program,3).  %* b :- a. *%
-            __mus__(answer_set,1).  %* not b *%
+            __mus__(answer_set,0).  %* not b *%
             """
         )
 
@@ -161,7 +161,7 @@ class TestMain(TestCase):
             query_atom="a",
             answer_set="a b",
             selectors="""
-            __mus__(answer_set,1).  %* b *%
+            __mus__(answer_set,0).  %* b *%
             """
         )
 
@@ -296,7 +296,7 @@ class TestMain(TestCase):
         self.assert_explain(result, """
         __mus__(program,2).  %* d:-c. *%
         __mus__(program,3).  %* b:-d. *%
-        __mus__(answer_set,2).  %* c *%
+        __mus__(answer_set,1).  %* c *%
         """)
 
     def test_subprogram_simple_d_first(self):
@@ -315,7 +315,7 @@ class TestMain(TestCase):
         )
         self.assert_explain(result, """
         __mus__(program,3).  %* b:-d. *%
-        __mus__(answer_set,2).  %* d *%
+        __mus__(answer_set,1).  %* d *%
         """)
 
     def test_multiple_atoms_can_be_free_choices(self):
