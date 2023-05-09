@@ -27,6 +27,8 @@ $ pytest -v tests
 
 Add flag `-s` to show print statements in the code
 
+------------------------------------------------------------
+
 ## Notes
 
 ### Restricted fragment
@@ -55,6 +57,7 @@ Based on the Clark Completion
 
         **`~h1 ~h2 b` $\to$ `a`**
 
+![Alt text](./img/support.svg)
 
 - **Lack of support**
 
@@ -67,6 +70,8 @@ Based on the Clark Completion
       `a | h2 :- b2.`
 
         **`h1 ~b2` $\to$ `not a`**
+
+![Alt text](./img/lack_of_support.svg)
 
 
 - **Constraint like**
@@ -81,6 +86,9 @@ Based on the Clark Completion
     - `:- not a, b1.`
       **`b1` $\to$ `a`**
 
+![Alt text](./img/constraint_like.svg)
+
+
 - **Last supporting rule**
 
     If `a` is true and for all rules $r$ such that $a\in H(r)$
@@ -94,11 +102,14 @@ Based on the Clark Completion
 
         **`a ~b1` $\to$ `b2`**
 
+![Alt text](./img/last_supporting_rule.svg)
+
 - **Well founded**
 
     Not considered
     Maybe we could say that anything that is not explained using the inferences above, came from well founded.
 
+------------------------------------------------------------
 
 
 ## TODOS
@@ -106,7 +117,8 @@ Based on the Clark Completion
 
 ### Complex development
 
-- [ ] Ask Roland how easy these are to implement
+- [ ] Ask Roland how easy these are to implement (Susana)
+- [ ] Try to see how to wrap the reason vector (Susana)
 
 #### Clasp
 - [ ] How to know were certain literals come from (Body, auxiliary)
@@ -124,6 +136,6 @@ Based on the Clark Completion
 
 
 ### Example application
-- [ ] Write sudoku with disjunction in the head and without choices
+- [ ] Write sudoku with disjunction in the head and without choices (Hannes)
 - [ ] Add the proof tree expected output in tests (Copy from mail)
 - [ ] Add more tests based on the different inferences
