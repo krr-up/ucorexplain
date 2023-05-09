@@ -3,7 +3,7 @@ UCOREXPLAIN
 """
 
 
-from typing import Final, Optional, Union
+from typing import Final, Optional, Union, Sequence
 
 import clingo
 import typeguard
@@ -46,21 +46,23 @@ def answer_set_to_constraints(
     if type(query_atom) == GroundAtom:
         query_atom = (query_atom,)
     query_atoms = set(query_atom)
+    query_literals = []
     constraints = []
-    for index, element in enumerate(answer_set):
+    for element in answer_set:
         atom, truth_value = unpack_answer_set_element(element)
         if atom in query_atoms:
-            constraints.append(f":- {answer_set_element_to_string(element)}  %* Query *% .")
+            query_literals.append(answer_set_element_to_string(element))
             query_atoms.remove(atom)
         else:
             constraints.append(
-                f":- not {answer_set_element_to_string(element)}, {mus_predicate}(answer_set,{index})"
+                f":- not {answer_set_element_to_string(element)}, {mus_predicate}(answer_set,{len(constraints)})"
                 f"  %* Answer set *% ."
             )
     for atom in query_atoms:
-        constraints.append(f":- not {atom}  %* Query *% .")
+        query_literals.append(f"not {answer_set_element_to_string(atom)}")
 
-    return [SymbolicRule.parse(constraint) for constraint in constraints]
+    return [SymbolicRule.parse(constraint) for constraint in constraints] + \
+        [SymbolicRule.parse(f"{mus_predicate} :- {', '.join(query_literals)}.")]
 
 
 def build_extended_program_and_selectors(
@@ -75,12 +77,12 @@ def build_extended_program_and_selectors(
     constraints = answer_set_to_constraints(answer_set, query_atom, mus_predicate)
     extended_program = SymbolicProgram.of(rules, constraints, SymbolicRule.parse(
         "{" +
-        f"{mus_predicate}(program,0..{len(rules) - 1}); "
-        f"{mus_predicate}(answer_set,0..{len(constraints) - 1})" +
+        f"{mus_predicate}(program,0..{len(rules) - 1})" +
+        (f"; {mus_predicate}(answer_set,0..{len(constraints) - 2})" if len(constraints) > 1 else "") +
         "}."
     ))
     selectors = [GroundAtom.parse(f"{mus_predicate}(program,{index})") for index in range(len(rules))] + \
-        [GroundAtom.parse(f"{mus_predicate}(answer_set,{index})") for index in range(len(constraints))]
+        [GroundAtom.parse(f"{mus_predicate}(answer_set,{index})") for index in range(len(constraints) - 1)]
     return extended_program, selectors
 
 
@@ -97,6 +99,23 @@ def build_control_and_maps(
         selector = GroundAtom.parse(str(atom.symbol))
         selector_to_literal[selector] = atom.literal
         literal_to_selector[atom.literal] = selector
+
+    counter = 0
+    for atom in control.symbolic_atoms.by_signature(mus_predicate, 0):
+        assert counter == 0
+        counter += 1
+
+        class Stopper(clingo.Propagator):
+            def init(self, init):
+                program_literal = init.symbolic_atoms[clingo.Function(mus_predicate)].literal
+                solver_literal = init.solver_literal(program_literal)
+                init.add_watch(solver_literal)
+
+            def propagate(self, ctl: clingo.PropagateControl, changes: Sequence[int]) -> None:
+                assert len(changes) == 1
+                ctl.add_clause(clause=[-changes[0]], tag=True)
+
+        control.register_propagator(Stopper())
 
     return control, selector_to_literal, literal_to_selector
 
@@ -137,7 +156,7 @@ def explain(
 
     control, selector_to_literal, literal_to_selector = build_control_and_maps(extended_program, mus_predicate)
 
-    console.log(f"Initial check with {len(selectors) - 1} selectors...")  # selector of the query is always true
+    console.log(f"Initial check with {len(selectors)} selectors...")
     result = check(
         control=control,
         with_selectors=selectors,
@@ -174,7 +193,13 @@ def explain(
 
     def selector_to_rule(selector):
         return program[selector.arguments[1].number] if selector.arguments[0].name == 'program' else \
-            answer_set_element_to_string(answer_set[selector.arguments[1].number])
+            answer_set_element_to_string(selector_to_rule.answer_set[selector.arguments[1].number])
+    selector_to_rule.answer_set = [
+        element for element in answer_set
+        if unpack_answer_set_element(element)[0] not in (
+            [query_atom] if type(query_atom) is GroundAtom else query_atom
+        )
+    ]
 
     selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(selector)} *%" for selector in selectors)
     return SymbolicProgram.parse(f"{extended_program}\n%* the selectors causing the inference *%\n{selectors_program}")
