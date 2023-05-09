@@ -17,6 +17,12 @@ pip install -e .[dev]
 ucorexplain -h
 ```
 
+Visualize sudoku
+
+```
+clingo examples/sudoku/encoding.lp examples/sudoku/instance.lp --outf=2 | clingraph --viz-encoding examples/sudoku/viz.lp --out=render --view --default-graph=sudoku  --engine=neato
+```
+
 ## Tests
 
 Run tests using `pytest`
