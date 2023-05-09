@@ -77,7 +77,6 @@ class TestMain(TestCase):
         )
         self.assertIsNone(result)
 
-
     def test_choice_rule_and_constraint_inference_by_constraint(self):
         """
         The choice rule alone doesn't cause the inference of atom c.
@@ -110,12 +109,11 @@ class TestMain(TestCase):
             query_atom="c a",
             answer_set="c",
             selectors="""
-            __mus__(answer_set,2).  %* :- not not b. *%
-            __mus__(program,3).  %* :- a, not b. *%
             __mus__(program,1).  %* :- not a, not b, not c. *%
+            __mus__(program,3).  %* :- a, not b. *%
+            __mus__(answer_set,0).  %* not b *%
             """
         )
-
 
     def test_choice__multiple_queries_free_choice(self):
         """
