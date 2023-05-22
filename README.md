@@ -194,14 +194,18 @@ Based on the Clark Completion
 
 ### Complex development
 
-- [ ] Ask Roland how easy these are to implement (Susana)
-- [ ] Try to see how to wrap the reason vector (Susana)
-
 #### Clasp
+- Build and run locally
+- Fork clasp and clingo to get our own version
+- Print the internal program of clasp into a file
 - [ ] How to know were certain literals come from (Body, auxiliary)
-- [ ] Link body variables to ground rules
+  - We need to add hack into clasp and output this information
+- [ ] Link body variables and nogoods to ground rules
+  - This is not a one to one correspondence since the set of nogoods is a set so an element might come from more than one rule.
+
 #### Gringo
-- [ ] Link grounded rules to non-ground rules (This was a wish in other projects)
+- [ ] Link grounded rules to non-ground rules
+  - We can add a theory atom with the line number of every rule (Hannes)
 
 
 ### Multiple queries
