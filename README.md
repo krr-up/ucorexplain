@@ -189,6 +189,31 @@ Based on the Clark Completion
 ------------------------------------------------------------
 
 
+### Meta-encoding implementing inference rules
+
+The encoding `inf_meta.lp` file implements the inference rules listed above.
+
+In order to work with it, we need the logic program used during minimum
+core computation in a reified form. Additionally, we also give the literals
+found in the core as input.
+
+Here is a sample run:
+
+```bash
+$ clingo --output=reify  ex1.lp | clingo - inf_meta.lp core.lp -c i=3
+clingo version 5.6.2
+Reading from - ...
+Solving...
+Answer: 1
+true(a,1,avoid_inconsistency) true(b,2,support) true(__mus__,3,support)
+SATISFIABLE
+```
+
+Note that `inf_meta.lp` encodes inference rules as actions applied in order similar
+to a planning problem. The goal is to generate the query. The number of these inference
+rule applications is given via the constant `i`, similar to the horizon in a planning problem.
+
+
 ## TODOS
 
 
