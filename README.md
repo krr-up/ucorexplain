@@ -213,6 +213,13 @@ Note that `inf_meta.lp` encodes inference rules as actions applied in order simi
 to a planning problem. The goal is to generate the query. The number of these inference
 rule applications is given via the constant `i`, similar to the horizon in a planning problem.
 
+### Some TODO items
+
+- [ ] Integration with ucorexplain
+- [ ] Some encoding improvements
+- [ ] Incremental version
+- [ ] Generating an explanation graph from the inference plan
+- [ ] Extending inference rules for choice rules and aggregates
 
 ## TODOS
 
