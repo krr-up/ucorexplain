@@ -35,6 +35,15 @@ def move_up(answer_set: AnswerSet, *pattern: SymbolicAtom) -> AnswerSet:
     return tuple(sorted(answer_set, key=key))
 
 
+def program_from_files(files) -> SymbolicProgram:
+    prg_str = ""
+    for f in files:
+        with open(f) as f:
+            prg_str+= "\n".join(f.readlines())
+
+    return SymbolicProgram.parse(prg_str)
+
+
 def answer_set_to_constraints(
         answer_set: AnswerSet,
         query_atom: GroundAtom | tuple[GroundAtom, ...],
@@ -51,19 +60,23 @@ def answer_set_to_constraints(
     for element in answer_set:
         atom, truth_value = unpack_answer_set_element(element)
         if atom in query_atoms:
-            query_literals.append(answer_set_element_to_string(element))
+            if truth_value:
+                query_literals.append(f" {answer_set_element_to_string(atom)}")
+            else:
+                query_literals.append(f" not {answer_set_element_to_string(atom)}")
             query_atoms.remove(atom)
+            pass
         else:
             constraints.append(
                 f":- not {answer_set_element_to_string(element)}, {mus_predicate}(answer_set,{len(constraints)})"
                 f"  %* Answer set *% ."
             )
-    for atom in query_atoms:
-        query_literals.append(f"not {answer_set_element_to_string(atom)}")
+    # for atom in query_atoms:
+        # TODO Removed not
+        # query_literals.append(f" {answer_set_element_to_string(atom)}")
 
     return [SymbolicRule.parse(constraint) for constraint in constraints] + \
         [SymbolicRule.parse(f"{mus_predicate} :- {', '.join(query_literals)}.")]
-
 
 def build_extended_program_and_selectors(
         program: SymbolicProgram,
@@ -136,12 +149,13 @@ def check(
     if on_core.res is not None and (len(on_core.res) == 0 or on_core.res[-1] != -1):
         return [literal_to_selector[literal] for literal in on_core.res]
 
-
+            
 @typeguard.typechecked
-def explain(
+def get_mus_program(
     program: SymbolicProgram,
     answer_set: AnswerSet,
     query_atom: GroundAtom | tuple[GroundAtom, ...],
+    use_core: bool = False
 ) -> Optional[SymbolicProgram]:
     mus_predicate: Final = f"__mus__"
 
@@ -165,7 +179,7 @@ def explain(
     )
     if result is None:
         console.log(f"  It's a free choice. Stop!")
-        return
+        return None, []
     console.log(f"  Shrink to {len(result)} selectors!")
     selectors = result
 
@@ -193,7 +207,8 @@ def explain(
 
     def selector_to_rule(selector):
         return program[selector.arguments[1].number] if selector.arguments[0].name == 'program' else \
-            answer_set_element_to_string(selector_to_rule.answer_set[selector.arguments[1].number])
+            answer_set_element_to_string(selector_to_rule.answer_set[selector.arguments[1].number])\
+                
     selector_to_rule.answer_set = [
         element for element in answer_set
         if unpack_answer_set_element(element)[0] not in (
@@ -201,8 +216,10 @@ def explain(
         )
     ]
 
-    selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(selector)} *%" for selector in selectors)
-    return SymbolicProgram.parse(f"{extended_program}\n%* the selectors causing the inference *%\n{selectors_program}")
+    
+    # selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(program, selector)} *%" for selector in selectors)
+    # return SymbolicProgram.parse(f"{extended_program}\n%* the selectors causing the inference *%\n{selectors_program}")
+    return SymbolicProgram.parse(f"{extended_program}"), selectors
 
 
 @typeguard.typechecked
@@ -210,7 +227,7 @@ def print_output(
         query_atom: GroundAtom,
         result: SymbolicProgram,
 ):
-    console.print("[bold red]Explanation:[/bold red]")
+    console.print("[bold red]MUS PROGRAM:[/bold red]")
     if result is not None:
         console.print(f"% {query_atom} is explained by")
         console.print(f"{result}")
@@ -218,27 +235,18 @@ def print_output(
         console.print(f"% {query_atom} is a free choice")
 
 
-# def print_program(sudoku_instance: str):
-#     instance = [line.strip() for line in sudoku_instance.strip().split('\n')]
-#     given = []
-#     for row, row_line in enumerate(instance, start=1):
-#         for col, value in enumerate(row_line, start=1):
-#             if value != '.':
-#                 given.append(f"given(({row}, {col}), {value}).")
+@typeguard.typechecked
+def print_selectors(
+        selectors: list
+):
+    console.print("[bold red]SELECTORS:[/bold red]")
+    for s in selectors:
+        console.print(answer_set_element_to_string(s)+".")
 
-#     sub_blocks = []
-#     for row in range(3):
-#         for col in range(3):
-#             sub_blocks.append(
-#                 f"block((sub, {row}, {col}), (Row, Col)) :- Row = {row * 3 + 1}..{(row + 1) * 3}; Col = {col * 3 + 1}..{(col + 1) * 3}.")
+def print_explanation(
+        explanation: list[GroundAtom]
+):
+    console.print("[bold red]EXPLANATION:[/bold red]")
+    for g in explanation:
+        console.print(answer_set_element_to_string(g))
 
-#     program = SymbolicProgram.parse("""
-#     {assign((Row, Col), Value) : Value = 1..9} = 1 :- Row = 1..9; Col = 1..9.
-#     :- block(Block, Cell); block(Block, Cell'), Cell != Cell'; assign(Cell, Value), assign(Cell', Value).
-#     :- given(Cell, Value), not assign(Cell, Value).
-#     """ + '\n'.join(f"block((row, {row + 1}), ({row + 1}, Col)) :- Col = 1..9." for row in range(9)) + """
-#     """ + '\n'.join(f"block((col, {col + 1}), (Row, {col + 1})) :- Row = 1..9." for col in range(9)) + """
-#     """ + '\n'.join(sub_blocks) + """
-#     block((sub, (Row-1) / 3, (Col-1) / 3), (Row, Col)) :- Row = 1..9; Col = 1..9.
-#         """ + '\n'.join(given))
-#     print(program)

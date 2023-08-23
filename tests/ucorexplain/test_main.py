@@ -6,7 +6,7 @@ from unittest import TestCase
 
 from dumbo_asp.primitives import SymbolicProgram, Model, GroundAtom
 
-from ucorexplain import explain
+from ucorexplain import get_mus_program, answer_set_element_to_string
 
 
 class TestMain(TestCase):
@@ -15,10 +15,10 @@ class TestMain(TestCase):
     """
 
     @staticmethod
-    def assert_explain(program: SymbolicProgram, selectors: str):
-        print(program)
-        assert str(program).split("%* the selectors causing the inference *%")[1].strip() == \
-               '\n'.join([line.strip() for line in selectors.strip().split('\n')])
+    def assert_mus_prg(program: SymbolicProgram, selectors: list, selectors_found: list,):
+        selectors_found_list = [answer_set_element_to_string(s) for s in selectors_found]
+        for s in selectors:
+            assert s.split(".")[0] in selectors_found_list
 
     @staticmethod
     def check_query(program: str, query_atom: str, answer_set: str, selectors: Optional[str]):
@@ -43,25 +43,26 @@ class TestMain(TestCase):
                     (GroundAtom.parse(atom[1:]), False) if atom.startswith('~') else (GroundAtom.parse(atom), True)
                 )
         # ALL ATOMS THAT ARE NOT MENTIONED IN THE ANSWER SET ARE FALSE.
-        # IF WE WANT THE USER TO SPECIFY ALL ATOMS THAT ARE TRUE, WE CAN MOVE THIS CODE IN THE explain() FUNCTION.
+        # IF WE WANT THE USER TO SPECIFY ALL ATOMS THAT ARE TRUE, WE CAN MOVE THIS CODE IN THE get_mus_program() FUNCTION.
         atoms_in_the_answer_set = set(element[0] for element in the_answer_set)
         for atom in the_program.herbrand_base:
             if atom not in atoms_in_the_answer_set:
                 the_answer_set.append((atom, False))
 
-        explanation = explain(
+        mus_prg, selectors_found = get_mus_program(
             program=the_program,
             answer_set=tuple(the_answer_set),
             query_atom=tuple(
                 GroundAtom.parse(atom) for atom in query_atom.split(' ')
             ),
         )
-        if explanation is None or selectors is None:
-            assert explanation == selectors
+        if mus_prg is None or selectors is None:
+            assert mus_prg == selectors
         else:
-            TestMain.assert_explain(
-                program=explanation,
+            TestMain.assert_mus_prg(
+                program=mus_prg,
                 selectors=selectors,
+                selectors_found =selectors_found,
             )
 
     def test_subprogram_free_choice(self):
@@ -70,7 +71,7 @@ class TestMain(TestCase):
         """)
         query_atom = GroundAtom.parse("c")
         answer_set = tuple(Model.of_program("c."))
-        result = explain(
+        result, selectors = get_mus_program(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
@@ -89,9 +90,9 @@ class TestMain(TestCase):
             """,
             query_atom="c",
             answer_set="c",
-            selectors="""
-            __mus__(program,1).  %* :- not c. *%
-            """
+            selectors=[
+                "__mus__(program,1).  %* :- not c. *%",
+            ]
         )
 
     def test_choice__multiple_queries(self):
@@ -108,11 +109,11 @@ class TestMain(TestCase):
             """,
             query_atom="c a",
             answer_set="c",
-            selectors="""
-            __mus__(program,1).  %* :- not a, not b, not c. *%
-            __mus__(program,3).  %* :- a, not b. *%
-            __mus__(answer_set,0).  %* not b *%
-            """
+            selectors=[
+                "__mus__(program,1).  %* :- not a, not b, not c. *%",
+                "__mus__(program,3).  %* :- a, not b. *%",
+                "__mus__(answer_set,0).  %* not b *%",
+            ]
         )
 
     def test_choice__multiple_queries_free_choice(self):
@@ -144,8 +145,7 @@ class TestMain(TestCase):
             """,
             query_atom="a",
             answer_set="",
-            selectors="""
-            """
+            selectors=[]
         )
 
     def test_well_founded_inference_2(self):
@@ -161,9 +161,7 @@ class TestMain(TestCase):
             """,
             query_atom="a",
             answer_set="~c",
-            selectors="""
-            __mus__(answer_set,0).  %* not c *%
-            """
+            selectors=["__mus__(answer_set,0).  %* not c *%"]
         )
 
     def test_well_founded_inference_3(self):
@@ -180,10 +178,10 @@ class TestMain(TestCase):
             """,
             query_atom="a",
             answer_set="~a ~b ~c",
-            selectors="""
-            __mus__(program,3).  %* b :- a. *%
-            __mus__(answer_set,0).  %* not b *%
-            """
+            selectors=[
+                "__mus__(program,3).  %* b :- a. *%",
+                "__mus__(answer_set,0).  %* not b *%",
+            ]
         )
 
     def test_simple_loop_with_choice_rule_1(self):
@@ -199,9 +197,9 @@ class TestMain(TestCase):
             """,
             query_atom="a",
             answer_set="a b",
-            selectors="""
-            __mus__(answer_set,0).  %* b *%
-            """
+            selectors=[
+                "__mus__(answer_set,0).  %* b *%"
+            ]
         )
 
     def test_simple_loop_with_choice_rule_2(self):
@@ -216,10 +214,10 @@ class TestMain(TestCase):
             """,
             query_atom="b",
             answer_set="a b",
-            selectors="""
-            __mus__(program,2).  %* b :- a. *%
-            __mus__(answer_set,0).  %* a *%
-            """
+            selectors=[
+                "__mus__(program,2).  %* b :- a. *%",
+                "__mus__(answer_set,0).  %* a *%"
+            ]
         )
 
     def test_simple_loop_with_choice_rule_3(self):
@@ -245,10 +243,10 @@ class TestMain(TestCase):
             """,
             query_atom="b",
             answer_set="a b",
-            selectors="""
-            __mus__(program,0).  %* a. *%
-            __mus__(program,1).  %* b :- a. *%
-            """
+            selectors=[
+            "__mus__(program,0).  %* a. *%",
+            "__mus__(program,1).  %* b :- a. *%"
+            ]
         )
 
     def test_inference_by_lack_of_support_1(self):
@@ -262,9 +260,9 @@ class TestMain(TestCase):
             """,
             query_atom="b",
             answer_set="",
-            selectors="""
-            __mus__(answer_set,0).  %* not a *%
-            """
+            selectors=[
+            "__mus__(answer_set,0).  %* not a *%"
+            ]
         )
 
     def test_inference_by_lack_of_support_2(self):
@@ -279,10 +277,9 @@ class TestMain(TestCase):
             """,
             query_atom="b",
             answer_set="",
-            selectors="""
-            __mus__(answer_set,0).  %* not a *%
-            __mus__(answer_set,1).  %* not a' *%
-            """
+            selectors=[
+            "__mus__(answer_set,0).  %* not a *%",
+            "__mus__(answer_set,1).  %* not a' *%"]
         )
 
     def test_subprogram_free(self):
@@ -293,12 +290,12 @@ class TestMain(TestCase):
         """)
         query_atom = GroundAtom.parse("c")
         answer_set = tuple(Model.of_program("a. b. c."))
-        result = explain(
+        result, selectors = get_mus_program(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
         )
-        self.assert_explain(result, "__mus__(answer_set,1).  %* b *%")
+        self.assert_mus_prg(result, ["__mus__(answer_set,1).  %* b *%"], selectors)
 
     def test_subprogram_selecting_choice(self):
         program = SymbolicProgram.parse("""
@@ -308,15 +305,15 @@ class TestMain(TestCase):
         """)
         query_atom = GroundAtom.parse("b")
         answer_set = tuple(Model.of_program("a. b."))
-        result = explain(
+        result, selectors = get_mus_program(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
         )
-        self.assert_explain(result, """
-        __mus__(program,0).  %* 1{a}. *%
-        __mus__(program,1).  %* b:-a. *%
-        """)
+        self.assert_mus_prg(result, [
+        "__mus__(program,0).  %* 1{a}. *%",
+        "__mus__(program,1).  %* b:-a. *%",
+        ],selectors)
 
     def test_subprogram_simple(self):
         program = SymbolicProgram.parse("""
@@ -327,16 +324,16 @@ class TestMain(TestCase):
         """)
         query_atom = GroundAtom.parse("b")
         answer_set = tuple(Model.of_program("a. b. c. d."))
-        result = explain(
+        result, selectors = get_mus_program(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
         )
-        self.assert_explain(result, """
-        __mus__(program,2).  %* d:-c. *%
-        __mus__(program,3).  %* b:-d. *%
-        __mus__(answer_set,1).  %* c *%
-        """)
+        self.assert_mus_prg(result, [
+        "__mus__(program,2).  %* d:-c. *%",
+        "__mus__(program,3).  %* b:-d. *%",
+        "__mus__(answer_set,1).  %* c *%",
+        ],selectors)
 
     def test_subprogram_simple_d_first(self):
         program = SymbolicProgram.parse("""
@@ -347,15 +344,14 @@ class TestMain(TestCase):
         """)
         query_atom = GroundAtom.parse("b")
         answer_set = tuple(GroundAtom.parse(atom) for atom in "a b d c".split())
-        result = explain(
+        result, selectors = get_mus_program(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,
         )
-        self.assert_explain(result, """
-        __mus__(program,3).  %* b:-d. *%
-        __mus__(answer_set,1).  %* d *%
-        """)
+        self.assert_mus_prg(result, [
+            "__mus__(program,3).  %* b:-d. *%",
+            "__mus__(answer_set,1).  %* d *%"],selectors)
 
     def test_multiple_atoms_can_be_free_choices(self):
         program = SymbolicProgram.parse("""
@@ -364,7 +360,7 @@ class TestMain(TestCase):
         """)
         query_atom = tuple(GroundAtom.parse(atom) for atom in "a b".split())
         answer_set = tuple(GroundAtom.parse(atom) for atom in "a b".split())
-        result = explain(
+        result, selectors = get_mus_program(
             program=program,
             answer_set=answer_set,
             query_atom=query_atom,

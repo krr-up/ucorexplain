@@ -23,6 +23,12 @@ Visualize sudoku
 clingo examples/sudoku/encoding.lp examples/sudoku/instance.lp --outf=2 | clingraph --viz-encoding examples/sudoku/viz.lp --out=render --view --default-graph=sudoku  --engine=neato
 ```
 
+Run the pipeline to explain the given query `-q` with answer set `--answer` for the program `--prg`
+
+```shell
+ucorexplain --prg examples/basic/choice/prg.lp --answer "a b" -q "b" -i 3
+```
+
 ## Tests
 
 Run tests using `pytest`
