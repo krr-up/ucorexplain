@@ -14,6 +14,7 @@ from rich.progress import Progress
 AnswerSetElement = Union[GroundAtom, tuple[GroundAtom, bool]]
 AnswerSet = tuple[AnswerSetElement, ...]
 
+MUS_PREDICATE: Final = f"__mus__"
 
 def unpack_answer_set_element(element: AnswerSetElement) -> tuple[GroundAtom, bool]:
     if type(element) != GroundAtom:
@@ -71,14 +72,14 @@ def answer_set_to_constraints(
                 f":- not {answer_set_element_to_string(element)}, {mus_predicate}(answer_set,{len(constraints)})"
                 f"  %* Answer set *% ."
             )
-    # for atom in query_atoms:
+    for atom in query_atoms:
         # TODO Removed not
-        # query_literals.append(f" {answer_set_element_to_string(atom)}")
+        query_literals.append(f" {answer_set_element_to_string(atom)}")
 
     return [SymbolicRule.parse(constraint) for constraint in constraints] + \
         [SymbolicRule.parse(f"{mus_predicate} :- {', '.join(query_literals)}.")]
 
-def build_extended_program_and_selectors(
+def build_extended_program_and_possible_selectors(
         program: SymbolicProgram,
         answer_set: AnswerSet,
         query_atom: GroundAtom | tuple[GroundAtom, ...],
@@ -100,11 +101,11 @@ def build_extended_program_and_selectors(
 
 
 def build_control_and_maps(
-        extended_program: SymbolicProgram,
+        extended_program: str,
         mus_predicate: str,
 ):
-    control = clingo.Control()
-    control.add(str(extended_program))
+    control = clingo.Control(["--warn=none"])
+    control.add(extended_program)
     control.ground([("base", [])])
     selector_to_literal = {}
     literal_to_selector = {}
@@ -142,45 +143,25 @@ def check(
     def on_core(core):
         on_core.res = core
     on_core.res = []
-
     control.solve(assumptions=[selector_to_literal[selector] for selector in with_selectors] + [-1],
                   on_core=on_core)
-
     if on_core.res is not None and (len(on_core.res) == 0 or on_core.res[-1] != -1):
-        return [literal_to_selector[literal] for literal in on_core.res]
+        return [literal_to_selector[literal] for literal in on_core.res if literal in literal_to_selector]
 
-            
-@typeguard.typechecked
-def get_mus_program(
-    program: SymbolicProgram,
-    answer_set: AnswerSet,
-    query_atom: GroundAtom | tuple[GroundAtom, ...],
-    use_core: bool = False
-) -> Optional[SymbolicProgram]:
-    mus_predicate: Final = f"__mus__"
-
-    extended_program, selectors = build_extended_program_and_selectors(
-        program, answer_set, query_atom, mus_predicate
-    )
-    console.print("[bold blue]-----------------[/bold blue]")
-    console.print(f"[bold blue]Extended program:[/bold blue]")
-    for line in extended_program:
-        console.print(f"{line}")
-    console.print("[bold blue]-----------------[/bold blue]")
-
-    control, selector_to_literal, literal_to_selector = build_control_and_maps(extended_program, mus_predicate)
-
-    console.log(f"Initial check with {len(selectors)} selectors...")
+def get_selectors(extended_program_, mus_predicate, all_selectors):
+    control, selector_to_literal, literal_to_selector = build_control_and_maps(extended_program_, mus_predicate)
+    selectors = all_selectors 
+    # console.log(f"Initial check with {len(selectors)} selectors...")
     result = check(
         control=control,
         with_selectors=selectors,
         literal_to_selector=literal_to_selector,
-        selector_to_literal=selector_to_literal
+        selector_to_literal=selector_to_literal,
     )
     if result is None:
-        console.log(f"  It's a free choice. Stop!")
-        return None, []
-    console.log(f"  Shrink to {len(result)} selectors!")
+        # console.log(f"  It's a free choice. Stop!")
+        return []
+    # console.log(f"  Shrink to {len(result)} selectors!")
     selectors = result
 
     with Progress(console=console, transient=True) as progress:
@@ -188,44 +169,54 @@ def get_mus_program(
         required_selectors = 0
 
         while required_selectors < len(selectors):
-            console.log(f"Flag {selectors[-1]} as required!")
+            # console.log(f"Flag {selectors[-1]} as required!")
             required_selectors += 1
             selectors.insert(0, selectors.pop())  # last selector is required... move it ahead
-            console.log(f"Check with {len(selectors)} selectors...")
+            # console.log(f"Check with {len(selectors)} selectors...")
             result = check(
                 control=control,
                 with_selectors=selectors,
                 literal_to_selector=literal_to_selector,
-                selector_to_literal=selector_to_literal
+                selector_to_literal=selector_to_literal,
             )
             assert result is not None
-            console.log(f"  Shrink to {len(result)} selectors!")
+            # console.log(f"  Shrink to {len(result)} selectors!")
             progress.update(task, advance=len(selectors) - len(result))
             selectors = result
 
-    console.log(f"Terminate with {len(selectors)} selectors!")
+    # console.log(f"Terminate with {len(selectors)} selectors!")
+    return selectors
+            
+@typeguard.typechecked
+def get_mus_program(
+    program: SymbolicProgram,
+    answer_set: AnswerSet,
+    query_atom: GroundAtom | tuple[GroundAtom, ...]
+) -> Optional[SymbolicProgram]:
 
-    def selector_to_rule(selector):
-        return program[selector.arguments[1].number] if selector.arguments[0].name == 'program' else \
-            answer_set_element_to_string(selector_to_rule.answer_set[selector.arguments[1].number])\
-                
-    selector_to_rule.answer_set = [
-        element for element in answer_set
-        if unpack_answer_set_element(element)[0] not in (
-            [query_atom] if type(query_atom) is GroundAtom else query_atom
-        )
-    ]
-
-    
-    # selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(program, selector)} *%" for selector in selectors)
-    # return SymbolicProgram.parse(f"{extended_program}\n%* the selectors causing the inference *%\n{selectors_program}")
+    extended_program, all_selectors = build_extended_program_and_possible_selectors(
+        program, answer_set, query_atom, MUS_PREDICATE
+    )
+    selectors = get_selectors(extended_program, MUS_PREDICATE, all_selectors)
     return SymbolicProgram.parse(f"{extended_program}"), selectors
 
+
+
+def print_with_title(title, value):
+    console.print(f"[bold red]{title}:[/bold red]")
+
+    if type(value)==list:
+        for e in value:
+            console.print(f"{e}")
+    else:
+        console.print(f"{value}")
+    console.print(f"[bold red]-------------[/bold red]")
+    
 
 @typeguard.typechecked
 def print_output(
         query_atom: GroundAtom,
-        result: SymbolicProgram,
+        result: SymbolicProgram | None,
 ):
     console.print("[bold red]MUS PROGRAM:[/bold red]")
     if result is not None:
@@ -240,6 +231,9 @@ def print_selectors(
         selectors: list
 ):
     console.print("[bold red]SELECTORS:[/bold red]")
+    if len(selectors)==0:
+        console.print("%IS A FREE CHOICE")
+        return 
     for s in selectors:
         console.print(answer_set_element_to_string(s)+".")
 

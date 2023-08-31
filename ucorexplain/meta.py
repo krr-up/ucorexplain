@@ -32,8 +32,9 @@ def run_meta(
         selectors,
         i = 3
 ):
+    
     reified = reify(prg=str(mus_prg))
-    ctl = Control([f"-c i={i}"])
+    ctl = Control(["--warn=none", f"-c i={i}"])
     selectors_program = '\n'.join(f"__core__({selector})." for selector in selectors)
 
     ctl.add("base",[],selectors_program)
@@ -46,7 +47,7 @@ def run_meta(
         explanations.append([GroundAtom.parse(str(s)) for s in m.symbols(shown=True)])
     ctl.solve(on_model=on_model)
     if len(explanations)==0:
-        print("NO EXPLANATION")
+        return []
     return explanations[0]
 
 

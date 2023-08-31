@@ -221,6 +221,26 @@ rule applications is given via the constant `i`, similar to the horizon in a pla
 
 ## TODOS
 
+### New pipeline
+
+(Susana)
+- Pm = P + Add __mus_directives 
+- Ph = P + [{a} for a in query + answer set] 
+- h = Compute herbrand base of Ph
+- Px = Pm + Add #external a for a in h 
+- S = Get Selectors (Px)
+
+- Pw = Px.decouple rules (Hannes)
+    ```
+    % a(X):- b(X); c(Y); __mus__(program,0).
+    body("a(X):-b(X) c(Y). base64",(X,Y)):- b(X); c(Y); __mus__(program,0).
+    a(X):-body(_,(X,Y)).
+    ```
+- R = Reify Pw
+- M = Meta of R + S (Orkunt)
+- G = Meta to build graph based on R + S + M  (Susana + Hannes + Orkunt)
+
+
 ### Complex development
 
 #### Clasp
