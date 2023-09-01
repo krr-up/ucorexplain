@@ -1,14 +1,13 @@
-import clingo
-from clingo.ast import Transformer, parse_string
-from clingo import ast as _ast
 from typing import List, Tuple
 
+import clingo
+from clingo import ast as _ast
+from clingo.ast import Transformer, parse_string
 
 RULE_ID_SIGNATURE = "_rule"
 
 
 class RuleTransformer(Transformer):
-
     def __init__(self):
         self.rule_id = 0
 
@@ -17,8 +16,11 @@ class RuleTransformer(Transformer):
         symbol = _ast.Function(
             location=node.location,
             name=RULE_ID_SIGNATURE,
-            arguments=[_ast.SymbolicTerm(node.location, clingo.parse_term(str(self.rule_id)))],
-            external=0)
+            arguments=[
+                _ast.SymbolicTerm(node.location, clingo.parse_term(str(self.rule_id)))
+            ],
+            external=0,
+        )
 
         # increase the rule_id by one after every transformed rule
         self.rule_id += 1
@@ -31,9 +33,14 @@ class RuleTransformer(Transformer):
         self.rule_id = 1
         out = []
         parse_string(program_string, lambda stm: out.append((str(self(stm)))))
-        out.append(f"{{_rule(1..{self.rule_id})}} % Choice rule to allow all _rule atoms to become assumptions")
+        out.append(
+            f"{{_rule(1..{self.rule_id})}} % Choice rule to allow all _rule atoms to become assumptions"
+        )
         return "\n".join(out)
 
     # TODO : Not a nice implementation. Should be refined in the future
     def get_assumptions(self) -> List[Tuple[clingo.Symbol, bool]]:
-        return [(clingo.parse_term(f"{RULE_ID_SIGNATURE}({rule_id})"), True) for rule_id in range(1, self.rule_id)]
+        return [
+            (clingo.parse_term(f"{RULE_ID_SIGNATURE}({rule_id})"), True)
+            for rule_id in range(1, self.rule_id)
+        ]

@@ -3,11 +3,17 @@ UCOREXPLAIN
 """
 
 
-from typing import Final, Optional, Union, Sequence
+from typing import Final, Optional, Sequence, Union
 
 import clingo
 import typeguard
-from dumbo_asp.primitives import SymbolicAtom, SymbolicRule, SymbolicProgram, Model, GroundAtom
+from dumbo_asp.primitives import (
+    GroundAtom,
+    Model,
+    SymbolicAtom,
+    SymbolicProgram,
+    SymbolicRule,
+)
 from dumbo_utils.console import console
 from rich.progress import Progress
 
@@ -15,6 +21,7 @@ AnswerSetElement = Union[GroundAtom, tuple[GroundAtom, bool]]
 AnswerSet = tuple[AnswerSetElement, ...]
 
 MUS_PREDICATE: Final = f"__mus__"
+
 
 def unpack_answer_set_element(element: AnswerSetElement) -> tuple[GroundAtom, bool]:
     if type(element) != GroundAtom:
@@ -40,15 +47,15 @@ def program_from_files(files) -> SymbolicProgram:
     prg_str = ""
     for f in files:
         with open(f) as f:
-            prg_str+= "\n".join(f.readlines())
+            prg_str += "\n".join(f.readlines())
 
     return SymbolicProgram.parse(prg_str)
 
 
 def answer_set_to_constraints(
-        answer_set: AnswerSet,
-        query_atom: GroundAtom | tuple[GroundAtom, ...],
-        mus_predicate: str
+    answer_set: AnswerSet,
+    query_atom: GroundAtom | tuple[GroundAtom, ...],
+    mus_predicate: str,
 ) -> list[SymbolicRule]:
     """
     Produces the sequence of selecting constraints.
@@ -66,7 +73,6 @@ def answer_set_to_constraints(
             else:
                 query_literals.append(f" not {answer_set_element_to_string(atom)}")
             query_atoms.remove(atom)
-            pass
         else:
             constraints.append(
                 f":- not {answer_set_element_to_string(element)}, {mus_predicate}(answer_set,{len(constraints)})"
@@ -75,33 +81,50 @@ def answer_set_to_constraints(
     for atom in query_atoms:
         query_literals.append(f" {answer_set_element_to_string(atom)}")
 
-    return [SymbolicRule.parse(constraint) for constraint in constraints] + \
-        [SymbolicRule.parse(f"{mus_predicate} :- {', '.join(query_literals)}.")]
+    return [SymbolicRule.parse(constraint) for constraint in constraints] + [
+        SymbolicRule.parse(f"{mus_predicate} :- {', '.join(query_literals)}.")
+    ]
+
 
 def build_extended_program_and_possible_selectors(
-        program: SymbolicProgram,
-        answer_set: AnswerSet,
-        query_atom: GroundAtom | tuple[GroundAtom, ...],
-        mus_predicate: str
+    program: SymbolicProgram,
+    answer_set: AnswerSet,
+    query_atom: GroundAtom | tuple[GroundAtom, ...],
+    mus_predicate: str,
 ) -> tuple[SymbolicProgram, list[GroundAtom]]:
-    rules = [rule.with_extended_body(SymbolicAtom.parse(f"{mus_predicate}(program,{index})"))
-             for index, rule in enumerate(program)]
+    rules = [
+        rule.with_extended_body(SymbolicAtom.parse(f"{mus_predicate}(program,{index})"))
+        for index, rule in enumerate(program)
+    ]
 
     constraints = answer_set_to_constraints(answer_set, query_atom, mus_predicate)
-    extended_program = SymbolicProgram.of(rules, constraints, SymbolicRule.parse(
-        "{" +
-        f"{mus_predicate}(program,0..{len(rules) - 1})" +
-        (f"; {mus_predicate}(answer_set,0..{len(constraints) - 2})" if len(constraints) > 1 else "") +
-        "}."
-    ))
-    selectors = [GroundAtom.parse(f"{mus_predicate}(program,{index})") for index in range(len(rules))] + \
-        [GroundAtom.parse(f"{mus_predicate}(answer_set,{index})") for index in range(len(constraints) - 1)]
+    extended_program = SymbolicProgram.of(
+        rules,
+        constraints,
+        SymbolicRule.parse(
+            "{"
+            + f"{mus_predicate}(program,0..{len(rules) - 1})"
+            + (
+                f"; {mus_predicate}(answer_set,0..{len(constraints) - 2})"
+                if len(constraints) > 1
+                else ""
+            )
+            + "}."
+        ),
+    )
+    selectors = [
+        GroundAtom.parse(f"{mus_predicate}(program,{index})")
+        for index in range(len(rules))
+    ] + [
+        GroundAtom.parse(f"{mus_predicate}(answer_set,{index})")
+        for index in range(len(constraints) - 1)
+    ]
     return extended_program, selectors
 
 
 def build_control_and_maps(
-        extended_program: str,
-        mus_predicate: str,
+    extended_program: str,
+    mus_predicate: str,
 ):
     control = clingo.Control(["--warn=none"])
     control.add(extended_program)
@@ -120,11 +143,15 @@ def build_control_and_maps(
 
         class Stopper(clingo.Propagator):
             def init(self, init):
-                program_literal = init.symbolic_atoms[clingo.Function(mus_predicate)].literal
+                program_literal = init.symbolic_atoms[
+                    clingo.Function(mus_predicate)
+                ].literal
                 solver_literal = init.solver_literal(program_literal)
                 init.add_watch(solver_literal)
 
-            def propagate(self, ctl: clingo.PropagateControl, changes: Sequence[int]) -> None:
+            def propagate(
+                self, ctl: clingo.PropagateControl, changes: Sequence[int]
+            ) -> None:
                 assert len(changes) == 1
                 ctl.add_clause(clause=[-changes[0]], tag=True)
 
@@ -134,22 +161,33 @@ def build_control_and_maps(
 
 
 def check(
-        control: clingo.Control,
-        with_selectors: list[GroundAtom],
-        selector_to_literal: dict[GroundAtom, int],
-        literal_to_selector: dict[int, GroundAtom],
+    control: clingo.Control,
+    with_selectors: list[GroundAtom],
+    selector_to_literal: dict[GroundAtom, int],
+    literal_to_selector: dict[int, GroundAtom],
 ) -> Optional[list[GroundAtom]]:
     def on_core(core):
         on_core.res = core
+
     on_core.res = []
-    control.solve(assumptions=[selector_to_literal[selector] for selector in with_selectors] + [-1],
-                  on_core=on_core)
+    control.solve(
+        assumptions=[selector_to_literal[selector] for selector in with_selectors]
+        + [-1],
+        on_core=on_core,
+    )
     if on_core.res is not None and (len(on_core.res) == 0 or on_core.res[-1] != -1):
-        return [literal_to_selector[literal] for literal in on_core.res if literal in literal_to_selector]
+        return [
+            literal_to_selector[literal]
+            for literal in on_core.res
+            if literal in literal_to_selector
+        ]
+
 
 def get_selectors(extended_program_, mus_predicate, all_selectors):
-    control, selector_to_literal, literal_to_selector = build_control_and_maps(extended_program_, mus_predicate)
-    selectors = all_selectors 
+    control, selector_to_literal, literal_to_selector = build_control_and_maps(
+        extended_program_, mus_predicate
+    )
+    selectors = all_selectors
     result = check(
         control=control,
         with_selectors=selectors,
@@ -158,14 +196,16 @@ def get_selectors(extended_program_, mus_predicate, all_selectors):
     )
     if result is None:
         selectors = []
-        print_with_title("SELECTORS",selectors)
+        print_with_title("SELECTORS", selectors)
         return selectors
     selectors = result
 
     required_selectors = 0
     while required_selectors < len(selectors):
         required_selectors += 1
-        selectors.insert(0, selectors.pop())  # last selector is required... move it ahead
+        selectors.insert(
+            0, selectors.pop()
+        )  # last selector is required... move it ahead
         result = check(
             control=control,
             with_selectors=selectors,
@@ -175,7 +215,7 @@ def get_selectors(extended_program_, mus_predicate, all_selectors):
         assert result is not None
         selectors = result
 
-    print_with_title("SELECTORS",selectors)
+    print_with_title("SELECTORS", selectors)
     return selectors
 
 
@@ -183,10 +223,11 @@ def extend_program_with_externals(extended_program, herbrand):
     """
     Extends the program with the atoms in the herbrand as externals to avoid simplifications
     """
-    herbrand_as_externals = "\n"+"\n".join(f"#external {str(h)}." for h in herbrand)
+    herbrand_as_externals = "\n" + "\n".join(f"#external {str(h)}." for h in herbrand)
     extended_program_with_externals = str(extended_program) + herbrand_as_externals
     print_with_title("EXTENDED PROGRAM WITH EXTERNALS", extended_program_with_externals)
     return extended_program_with_externals
+
 
 def extend_answer_set(answer_set, herbrand):
     """
@@ -199,16 +240,19 @@ def extend_answer_set(answer_set, herbrand):
             answer_set.append((atom, False))
     return tuple(answer_set)
 
+
 def get_answer_set(answer_set_str):
     """
     Gets and answer set of tuples (Atom, Truth) from a string
     """
     answer_set = []
     if answer_set_str == "":
-        return tuple([]) 
-    for atom in answer_set_str.split(' '):
+        return tuple([])
+    for atom in answer_set_str.split(" "):
         answer_set.append(
-            (GroundAtom.parse(atom[1:]), False) if atom.startswith('~') else (GroundAtom.parse(atom), True)
+            (GroundAtom.parse(atom[1:]), False)
+            if atom.startswith("~")
+            else (GroundAtom.parse(atom), True)
         )
     return tuple(answer_set)
 
@@ -217,9 +261,11 @@ def get_herbrand(program, known_atoms):
     """
     Adds choices for the known atoms and computes the herbrand base
     """
-    choices = [SymbolicRule.parse("{"+str(a)+"}.") for a in known_atoms]
+    choices = [SymbolicRule.parse("{" + str(a) + "}.") for a in known_atoms]
     print_with_title("CHOICES", choices)
-    program_with_choices = SymbolicProgram.parse(str(program) + "\n" + "".join([str(c)+"\n" for c in choices]))
+    program_with_choices = SymbolicProgram.parse(
+        str(program) + "\n" + "".join([str(c) + "\n" for c in choices])
+    )
     herbrand = program_with_choices.herbrand_base
     print_with_title("HERBRAND BASE", herbrand)
     return herbrand
@@ -228,19 +274,16 @@ def get_herbrand(program, known_atoms):
 def print_with_title(title, value):
     console.print(f"[bold red]{title}:[/bold red]")
 
-    if type(value)==list:
+    if type(value) == list:
         for e in value:
             console.print(f"{e}")
     else:
         console.print(f"{value}")
     console.print(f"[bold red]-------------[/bold red]")
-    
+
 
 @typeguard.typechecked
-def print_output(
-        query_atom: GroundAtom,
-        result: SymbolicProgram | None):
-    
+def print_output(query_atom: GroundAtom, result: SymbolicProgram | None):
     console.print("[bold red]MUS PROGRAM:[/bold red]")
     if result is not None:
         console.print(f"% {query_atom} is explained by")
@@ -250,35 +293,29 @@ def print_output(
 
 
 @typeguard.typechecked
-def print_selectors(
-        selectors: list
-):
+def print_selectors(selectors: list):
     console.print("[bold red]SELECTORS:[/bold red]")
-    if len(selectors)==0:
+    if len(selectors) == 0:
         console.print("%IS A FREE CHOICE")
-        return 
+        return
     for s in selectors:
-        console.print(answer_set_element_to_string(s)+".")
+        console.print(answer_set_element_to_string(s) + ".")
 
-def print_explanation(
-        explanation: list[GroundAtom]
-):
+
+def print_explanation(explanation: list[GroundAtom]):
     console.print("[bold red]EXPLANATION:[/bold red]")
     for g in explanation:
         console.print(answer_set_element_to_string(g))
 
 
-
-            
 @typeguard.typechecked
 def get_mus_program_and_selectors(
     program: SymbolicProgram,
     answer_set: AnswerSet,
-    query_atom: GroundAtom | tuple[GroundAtom, ...]
+    query_atom: GroundAtom | tuple[GroundAtom, ...],
 ) -> Optional[SymbolicProgram]:
-
     """
-    Builds MUS program extended with  with externals and the needed selectors 
+    Builds MUS program extended with  with externals and the needed selectors
     """
     full_query = list(query_atom) if type(query_atom) == tuple else [query_atom]
     # Get full herbrand based on query and answer
@@ -293,9 +330,13 @@ def get_mus_program_and_selectors(
     extended_program, all_selectors = build_extended_program_and_possible_selectors(
         program, answer_set, query_atom, MUS_PREDICATE
     )
-    
-    extended_program_with_externals = extend_program_with_externals(extended_program, herbrand)
 
-    selectors = get_selectors(extended_program_with_externals, MUS_PREDICATE, all_selectors)
+    extended_program_with_externals = extend_program_with_externals(
+        extended_program, herbrand
+    )
+
+    selectors = get_selectors(
+        extended_program_with_externals, MUS_PREDICATE, all_selectors
+    )
 
     return extended_program_with_externals, selectors

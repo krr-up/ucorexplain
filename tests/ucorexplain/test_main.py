@@ -4,9 +4,13 @@ Test cases for main application functionality.
 from typing import Optional
 from unittest import TestCase
 
-from dumbo_asp.primitives import SymbolicProgram, Model, GroundAtom
+from dumbo_asp.primitives import GroundAtom, Model, SymbolicProgram
 
-from ucorexplain import get_answer_set, get_mus_program_and_selectors, answer_set_element_to_string
+from ucorexplain import (
+    answer_set_element_to_string,
+    get_answer_set,
+    get_mus_program_and_selectors,
+)
 
 
 class TestMain(TestCase):
@@ -15,16 +19,23 @@ class TestMain(TestCase):
     """
 
     @staticmethod
-    def assert_selectors(selectors: list, selectors_found: list,):
+    def assert_selectors(
+        selectors: list,
+        selectors_found: list,
+    ):
         if selectors is None:
-            assert len(selectors_found)==0
+            assert len(selectors_found) == 0
             return
-        selectors_found_list = [answer_set_element_to_string(s) for s in selectors_found]
+        selectors_found_list = [
+            answer_set_element_to_string(s) for s in selectors_found
+        ]
         for s in selectors:
             assert s.split(".")[0] in selectors_found_list
 
     @staticmethod
-    def check_query(program: str, query_atom: str, answer_set: str, selectors: Optional[str]):
+    def check_query(
+        program: str, query_atom: str, answer_set: str, selectors: Optional[str]
+    ):
         """
         Check if the query against the program and answer set produces the selectors in answer.
 
@@ -41,17 +52,15 @@ class TestMain(TestCase):
         program = SymbolicProgram.parse(program)
 
         answer_set = get_answer_set(answer_set)
-        query = tuple(GroundAtom.parse(atom) for atom in query_atom.split(' '))
+        query = tuple(GroundAtom.parse(atom) for atom in query_atom.split(" "))
 
         mus_prg, selectors_found = get_mus_program_and_selectors(
-            program=program,
-            answer_set=tuple(answer_set),
-            query_atom=query
+            program=program, answer_set=tuple(answer_set), query_atom=query
         )
-    
+
         TestMain.assert_selectors(
             selectors=selectors,
-            selectors_found =selectors_found,
+            selectors_found=selectors_found,
         )
 
     def test_subprogram_free_choice(self):
@@ -61,8 +70,8 @@ class TestMain(TestCase):
             """,
             query_atom="c",
             answer_set="c",
-            selectors=None
-        )    
+            selectors=None,
+        )
 
     def test_choice_rule_and_constraint_inference_by_constraint(self):
         """
@@ -78,7 +87,7 @@ class TestMain(TestCase):
             answer_set="c",
             selectors=[
                 "__mus__(program,1).  %* :- not c. *%",
-            ]
+            ],
         )
 
     def test_choice__multiple_queries(self):
@@ -99,7 +108,7 @@ class TestMain(TestCase):
                 "__mus__(program,1).  %* :- not a, not b, not c. *%",
                 "__mus__(program,3).  %* :- a, not b. *%",
                 "__mus__(answer_set,0).  %* not b *%",
-            ]
+            ],
         )
 
     def test_choice__multiple_queries_free_choice(self):
@@ -117,7 +126,7 @@ class TestMain(TestCase):
             """,
             query_atom="c a b",
             answer_set="c",
-            selectors=None
+            selectors=None,
         )
 
     def test_well_founded_inference_1(self):
@@ -131,7 +140,7 @@ class TestMain(TestCase):
             """,
             query_atom="a",
             answer_set="",
-            selectors=[]
+            selectors=[],
         )
 
     def test_well_founded_inference_2(self):
@@ -147,7 +156,7 @@ class TestMain(TestCase):
             """,
             query_atom="a",
             answer_set="~c",
-            selectors=["__mus__(answer_set,0).  %* not c *%"]
+            selectors=["__mus__(answer_set,0).  %* not c *%"],
         )
 
     def test_well_founded_inference_3(self):
@@ -167,7 +176,7 @@ class TestMain(TestCase):
             selectors=[
                 "__mus__(program,3).  %* b :- a. *%",
                 "__mus__(answer_set,0).  %* not b *%",
-            ]
+            ],
         )
 
     def test_simple_loop_with_choice_rule_1(self):
@@ -183,9 +192,7 @@ class TestMain(TestCase):
             """,
             query_atom="a",
             answer_set="a b",
-            selectors=[
-                "__mus__(answer_set,0).  %* b *%"
-            ]
+            selectors=["__mus__(answer_set,0).  %* b *%"],
         )
 
     def test_simple_loop_with_choice_rule_2(self):
@@ -202,8 +209,8 @@ class TestMain(TestCase):
             answer_set="a b",
             selectors=[
                 "__mus__(program,2).  %* b :- a. *%",
-                "__mus__(answer_set,0).  %* a *%"
-            ]
+                "__mus__(answer_set,0).  %* a *%",
+            ],
         )
 
     def test_simple_loop_with_choice_rule_3(self):
@@ -218,7 +225,7 @@ class TestMain(TestCase):
             """,
             query_atom="a b",
             answer_set="a b",
-            selectors=None
+            selectors=None,
         )
 
     def test_inference_by_support(self):
@@ -230,9 +237,9 @@ class TestMain(TestCase):
             query_atom="b",
             answer_set="a b",
             selectors=[
-            "__mus__(program,0).  %* a. *%",
-            "__mus__(program,1).  %* b :- a. *%"
-            ]
+                "__mus__(program,0).  %* a. *%",
+                "__mus__(program,1).  %* b :- a. *%",
+            ],
         )
 
     def test_inference_by_lack_of_support_1(self):
@@ -246,9 +253,7 @@ class TestMain(TestCase):
             """,
             query_atom="b",
             answer_set="",
-            selectors=[
-            "__mus__(answer_set,0).  %* not a *%"
-            ]
+            selectors=["__mus__(answer_set,0).  %* not a *%"],
         )
 
     def test_inference_by_lack_of_support_2(self):
@@ -264,8 +269,9 @@ class TestMain(TestCase):
             query_atom="b",
             answer_set="",
             selectors=[
-            "__mus__(answer_set,0).  %* not a *%",
-            "__mus__(answer_set,1).  %* not a' *%"]
+                "__mus__(answer_set,0).  %* not a *%",
+                "__mus__(answer_set,1).  %* not a' *%",
+            ],
         )
 
     def test_subprogram_free(self):
@@ -277,8 +283,8 @@ class TestMain(TestCase):
             """,
             query_atom="c",
             answer_set="a b c",
-            selectors=["__mus__(answer_set,1).  %* b *%"]
-        )    
+            selectors=["__mus__(answer_set,1).  %* b *%"],
+        )
 
     def test_subprogram_selecting_choice(self):
         self.check_query(
@@ -292,9 +298,9 @@ class TestMain(TestCase):
             selectors=[
                 "__mus__(program,0).  %* 1{a}. *%",
                 "__mus__(program,1).  %* b:-a. *%",
-            ]   
-        )    
-    
+            ],
+        )
+
     def test_subprogram_simple(self):
         self.check_query(
             program="""
@@ -306,12 +312,11 @@ class TestMain(TestCase):
             query_atom="b",
             answer_set="a b c d",
             selectors=[
-            "__mus__(program,2).  %* d:-c. *%",
-            "__mus__(program,3).  %* b:-d. *%",
-            "__mus__(answer_set,1).  %* c *%",
-            ] 
-        )  
-            
+                "__mus__(program,2).  %* d:-c. *%",
+                "__mus__(program,3).  %* b:-d. *%",
+                "__mus__(answer_set,1).  %* c *%",
+            ],
+        )
 
     def test_subprogram_simple_d_first(self):
         self.check_query(
@@ -324,10 +329,10 @@ class TestMain(TestCase):
             query_atom="b",
             answer_set="a b c d",
             selectors=[
-            "__mus__(program,3).  %* b:-d. *%",
-            "__mus__(answer_set,1).  %* d *%"] 
-        )  
-        
+                "__mus__(program,3).  %* b:-d. *%",
+                "__mus__(answer_set,1).  %* d *%",
+            ],
+        )
 
     def test_multiple_atoms_can_be_free_choices(self):
         self.check_query(
@@ -337,9 +342,9 @@ class TestMain(TestCase):
             """,
             query_atom="a b",
             answer_set="a b",
-            selectors=None 
-        )  
-        
+            selectors=None,
+        )
+
     def test_not_removed_in_ground(self):
         self.check_query(
             program="""
@@ -348,6 +353,5 @@ class TestMain(TestCase):
             """,
             query_atom="b",
             answer_set="a",
-            selectors=["__mus__(program,0)"]
-        )  
-        
+            selectors=["__mus__(program,0)"],
+        )
