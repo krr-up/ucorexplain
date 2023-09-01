@@ -5,7 +5,7 @@ from typing import List, Optional
 from clingo import Control, Symbol
 from clingox.reify import Reifier
 from dumbo_asp.primitives import GroundAtom
-
+from ucorexplain import print_with_title
 
 def reify(prg: Optional[str] = None, files: Optional[List] = None) -> str:
     """
@@ -46,9 +46,11 @@ def run_meta(
     def on_model(m):
         explanations.append([GroundAtom.parse(str(s)) for s in m.symbols(shown=True)])
     ctl.solve(on_model=on_model)
-    if len(explanations)==0:
-        return []
-    return explanations[0]
+    explanation = []
+    if len(explanations)>0:
+        explanation =  explanations[0]
+    print_with_title("EXPLANATION",explanation)
+    return explanation
 
 
 

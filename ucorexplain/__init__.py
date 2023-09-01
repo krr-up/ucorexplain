@@ -73,7 +73,6 @@ def answer_set_to_constraints(
                 f"  %* Answer set *% ."
             )
     for atom in query_atoms:
-        # TODO Removed not
         query_literals.append(f" {answer_set_element_to_string(atom)}")
 
     return [SymbolicRule.parse(constraint) for constraint in constraints] + \
@@ -151,7 +150,6 @@ def check(
 def get_selectors(extended_program_, mus_predicate, all_selectors):
     control, selector_to_literal, literal_to_selector = build_control_and_maps(extended_program_, mus_predicate)
     selectors = all_selectors 
-    # console.log(f"Initial check with {len(selectors)} selectors...")
     result = check(
         control=control,
         with_selectors=selectors,
@@ -159,47 +157,72 @@ def get_selectors(extended_program_, mus_predicate, all_selectors):
         selector_to_literal=selector_to_literal,
     )
     if result is None:
-        # console.log(f"  It's a free choice. Stop!")
-        return []
-    # console.log(f"  Shrink to {len(result)} selectors!")
+        selectors = []
+        print_with_title("SELECTORS",selectors)
+        return selectors
     selectors = result
 
-    with Progress(console=console, transient=True) as progress:
-        task = progress.add_task("Searching MUS...", total=len(selectors))
-        required_selectors = 0
+    required_selectors = 0
+    while required_selectors < len(selectors):
+        required_selectors += 1
+        selectors.insert(0, selectors.pop())  # last selector is required... move it ahead
+        result = check(
+            control=control,
+            with_selectors=selectors,
+            literal_to_selector=literal_to_selector,
+            selector_to_literal=selector_to_literal,
+        )
+        assert result is not None
+        selectors = result
 
-        while required_selectors < len(selectors):
-            # console.log(f"Flag {selectors[-1]} as required!")
-            required_selectors += 1
-            selectors.insert(0, selectors.pop())  # last selector is required... move it ahead
-            # console.log(f"Check with {len(selectors)} selectors...")
-            result = check(
-                control=control,
-                with_selectors=selectors,
-                literal_to_selector=literal_to_selector,
-                selector_to_literal=selector_to_literal,
-            )
-            assert result is not None
-            # console.log(f"  Shrink to {len(result)} selectors!")
-            progress.update(task, advance=len(selectors) - len(result))
-            selectors = result
-
-    # console.log(f"Terminate with {len(selectors)} selectors!")
+    print_with_title("SELECTORS",selectors)
     return selectors
-            
-@typeguard.typechecked
-def get_mus_program(
-    program: SymbolicProgram,
-    answer_set: AnswerSet,
-    query_atom: GroundAtom | tuple[GroundAtom, ...]
-) -> Optional[SymbolicProgram]:
 
-    extended_program, all_selectors = build_extended_program_and_possible_selectors(
-        program, answer_set, query_atom, MUS_PREDICATE
-    )
-    selectors = get_selectors(extended_program, MUS_PREDICATE, all_selectors)
-    return SymbolicProgram.parse(f"{extended_program}"), selectors
 
+def extend_program_with_externals(extended_program, herbrand):
+    """
+    Extends the program with the atoms in the herbrand as externals to avoid simplifications
+    """
+    herbrand_as_externals = "\n"+"\n".join(f"#external {str(h)}." for h in herbrand)
+    extended_program_with_externals = str(extended_program) + herbrand_as_externals
+    print_with_title("EXTENDED PROGRAM WITH EXTERNALS", extended_program_with_externals)
+    return extended_program_with_externals
+
+def extend_answer_set(answer_set, herbrand):
+    """
+    Extends an answer set with (a, False) for every a in herbrand that is not in defined
+    """
+    atoms_in_answer_set = set(element[0] for element in answer_set)
+    answer_set = list(answer_set)
+    for atom in herbrand:
+        if atom not in atoms_in_answer_set:
+            answer_set.append((atom, False))
+    return tuple(answer_set)
+
+def get_answer_set(answer_set_str):
+    """
+    Gets and answer set of tuples (Atom, Truth) from a string
+    """
+    answer_set = []
+    if answer_set_str == "":
+        return tuple([]) 
+    for atom in answer_set_str.split(' '):
+        answer_set.append(
+            (GroundAtom.parse(atom[1:]), False) if atom.startswith('~') else (GroundAtom.parse(atom), True)
+        )
+    return tuple(answer_set)
+
+
+def get_herbrand(program, known_atoms):
+    """
+    Adds choices for the known atoms and computes the herbrand base
+    """
+    choices = [SymbolicRule.parse("{"+str(a)+"}.") for a in known_atoms]
+    print_with_title("CHOICES", choices)
+    program_with_choices = SymbolicProgram.parse(str(program) + "\n" + "".join([str(c)+"\n" for c in choices]))
+    herbrand = program_with_choices.herbrand_base
+    print_with_title("HERBRAND BASE", herbrand)
+    return herbrand
 
 
 def print_with_title(title, value):
@@ -216,8 +239,8 @@ def print_with_title(title, value):
 @typeguard.typechecked
 def print_output(
         query_atom: GroundAtom,
-        result: SymbolicProgram | None,
-):
+        result: SymbolicProgram | None):
+    
     console.print("[bold red]MUS PROGRAM:[/bold red]")
     if result is not None:
         console.print(f"% {query_atom} is explained by")
@@ -244,3 +267,35 @@ def print_explanation(
     for g in explanation:
         console.print(answer_set_element_to_string(g))
 
+
+
+            
+@typeguard.typechecked
+def get_mus_program_and_selectors(
+    program: SymbolicProgram,
+    answer_set: AnswerSet,
+    query_atom: GroundAtom | tuple[GroundAtom, ...]
+) -> Optional[SymbolicProgram]:
+
+    """
+    Builds MUS program extended with  with externals and the needed selectors 
+    """
+    full_query = list(query_atom) if type(query_atom) == tuple else [query_atom]
+    # Get full herbrand based on query and answer
+    atoms_in_answer_set = set(element[0] for element in answer_set)
+    known_atoms = set(list(atoms_in_answer_set) + full_query)
+    herbrand = get_herbrand(program, known_atoms)
+
+    # Add atoms from herbrand to answer set
+    answer_set = extend_answer_set(answer_set, herbrand)
+
+    # Get MUS program
+    extended_program, all_selectors = build_extended_program_and_possible_selectors(
+        program, answer_set, query_atom, MUS_PREDICATE
+    )
+    
+    extended_program_with_externals = extend_program_with_externals(extended_program, herbrand)
+
+    selectors = get_selectors(extended_program_with_externals, MUS_PREDICATE, all_selectors)
+
+    return extended_program_with_externals, selectors

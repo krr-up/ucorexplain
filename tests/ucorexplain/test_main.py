@@ -6,7 +6,7 @@ from unittest import TestCase
 
 from dumbo_asp.primitives import SymbolicProgram, Model, GroundAtom
 
-from ucorexplain import get_mus_program, answer_set_element_to_string
+from ucorexplain import get_answer_set, get_mus_program_and_selectors, answer_set_element_to_string
 
 
 class TestMain(TestCase):
@@ -15,7 +15,10 @@ class TestMain(TestCase):
     """
 
     @staticmethod
-    def assert_mus_prg(program: SymbolicProgram, selectors: list, selectors_found: list,):
+    def assert_selectors(selectors: list, selectors_found: list,):
+        if selectors is None:
+            assert len(selectors_found)==0
+            return
         selectors_found_list = [answer_set_element_to_string(s) for s in selectors_found]
         for s in selectors:
             assert s.split(".")[0] in selectors_found_list
@@ -34,49 +37,32 @@ class TestMain(TestCase):
             None if the query is expected to be a free choice.
         :returns: Nothing, but raises an error if the actual outcome doesn't match the expected outcome
         """
-        the_program = SymbolicProgram.parse(program)
 
-        the_answer_set = []
-        if answer_set:
-            for atom in answer_set.split(' '):
-                the_answer_set.append(
-                    (GroundAtom.parse(atom[1:]), False) if atom.startswith('~') else (GroundAtom.parse(atom), True)
-                )
-        # ALL ATOMS THAT ARE NOT MENTIONED IN THE ANSWER SET ARE FALSE.
-        # IF WE WANT THE USER TO SPECIFY ALL ATOMS THAT ARE TRUE, WE CAN MOVE THIS CODE IN THE get_mus_program() FUNCTION.
-        atoms_in_the_answer_set = set(element[0] for element in the_answer_set)
-        for atom in the_program.herbrand_base:
-            if atom not in atoms_in_the_answer_set:
-                the_answer_set.append((atom, False))
+        program = SymbolicProgram.parse(program)
 
-        mus_prg, selectors_found = get_mus_program(
-            program=the_program,
-            answer_set=tuple(the_answer_set),
-            query_atom=tuple(
-                GroundAtom.parse(atom) for atom in query_atom.split(' ')
-            ),
+        answer_set = get_answer_set(answer_set)
+        query = tuple(GroundAtom.parse(atom) for atom in query_atom.split(' '))
+
+        mus_prg, selectors_found = get_mus_program_and_selectors(
+            program=program,
+            answer_set=tuple(answer_set),
+            query_atom=query
         )
-        if mus_prg is None or selectors is None:
-            assert mus_prg == selectors
-        else:
-            TestMain.assert_mus_prg(
-                program=mus_prg,
-                selectors=selectors,
-                selectors_found =selectors_found,
-            )
+    
+        TestMain.assert_selectors(
+            selectors=selectors,
+            selectors_found =selectors_found,
+        )
 
     def test_subprogram_free_choice(self):
-        program = SymbolicProgram.parse("""
-        {c}.
-        """)
-        query_atom = GroundAtom.parse("c")
-        answer_set = tuple(Model.of_program("c."))
-        result, selectors = get_mus_program(
-            program=program,
-            answer_set=answer_set,
-            query_atom=query_atom,
-        )
-        self.assertIsNone(result)
+        self.check_query(
+            program="""
+            {c}.
+            """,
+            query_atom="c",
+            answer_set="c",
+            selectors=None
+        )    
 
     def test_choice_rule_and_constraint_inference_by_constraint(self):
         """
@@ -283,86 +269,85 @@ class TestMain(TestCase):
         )
 
     def test_subprogram_free(self):
-        program = SymbolicProgram.parse("""
-        a.
-        {c} :- a.
-        b :- c.
-        """)
-        query_atom = GroundAtom.parse("c")
-        answer_set = tuple(Model.of_program("a. b. c."))
-        result, selectors = get_mus_program(
-            program=program,
-            answer_set=answer_set,
-            query_atom=query_atom,
-        )
-        self.assert_mus_prg(result, ["__mus__(answer_set,1).  %* b *%"], selectors)
+        self.check_query(
+            program="""
+            a.
+            {c} :- a.
+            b :- c.
+            """,
+            query_atom="c",
+            answer_set="a b c",
+            selectors=["__mus__(answer_set,1).  %* b *%"]
+        )    
 
     def test_subprogram_selecting_choice(self):
-        program = SymbolicProgram.parse("""
-        1{a}.
-        b:-a.
-        b:-not a.
-        """)
-        query_atom = GroundAtom.parse("b")
-        answer_set = tuple(Model.of_program("a. b."))
-        result, selectors = get_mus_program(
-            program=program,
-            answer_set=answer_set,
-            query_atom=query_atom,
-        )
-        self.assert_mus_prg(result, [
-        "__mus__(program,0).  %* 1{a}. *%",
-        "__mus__(program,1).  %* b:-a. *%",
-        ],selectors)
-
+        self.check_query(
+            program="""
+            1{a}.
+            b:-a.
+            b:-not a.
+            """,
+            query_atom="b",
+            answer_set="a b",
+            selectors=[
+                "__mus__(program,0).  %* 1{a}. *%",
+                "__mus__(program,1).  %* b:-a. *%",
+            ]   
+        )    
+    
     def test_subprogram_simple(self):
-        program = SymbolicProgram.parse("""
-        a.
-        {c}:-a.
-        d:-c.
-        b:-d.
-        """)
-        query_atom = GroundAtom.parse("b")
-        answer_set = tuple(Model.of_program("a. b. c. d."))
-        result, selectors = get_mus_program(
-            program=program,
-            answer_set=answer_set,
-            query_atom=query_atom,
-        )
-        self.assert_mus_prg(result, [
-        "__mus__(program,2).  %* d:-c. *%",
-        "__mus__(program,3).  %* b:-d. *%",
-        "__mus__(answer_set,1).  %* c *%",
-        ],selectors)
+        self.check_query(
+            program="""
+            a.
+            {c}:-a.
+            d:-c.
+            b:-d.
+            """,
+            query_atom="b",
+            answer_set="a b c d",
+            selectors=[
+            "__mus__(program,2).  %* d:-c. *%",
+            "__mus__(program,3).  %* b:-d. *%",
+            "__mus__(answer_set,1).  %* c *%",
+            ] 
+        )  
+            
 
     def test_subprogram_simple_d_first(self):
-        program = SymbolicProgram.parse("""
-        a.
-        {c}:-a.
-        d:-c.
-        b:-d.
-        """)
-        query_atom = GroundAtom.parse("b")
-        answer_set = tuple(GroundAtom.parse(atom) for atom in "a b d c".split())
-        result, selectors = get_mus_program(
-            program=program,
-            answer_set=answer_set,
-            query_atom=query_atom,
-        )
-        self.assert_mus_prg(result, [
+        self.check_query(
+            program="""
+            a.
+            {c}:-a.
+            d:-c.
+            b:-d.
+            """,
+            query_atom="b",
+            answer_set="a b c d",
+            selectors=[
             "__mus__(program,3).  %* b:-d. *%",
-            "__mus__(answer_set,1).  %* d *%"],selectors)
+            "__mus__(answer_set,1).  %* d *%"] 
+        )  
+        
 
     def test_multiple_atoms_can_be_free_choices(self):
-        program = SymbolicProgram.parse("""
-        {a}.
-        b :- a.
-        """)
-        query_atom = tuple(GroundAtom.parse(atom) for atom in "a b".split())
-        answer_set = tuple(GroundAtom.parse(atom) for atom in "a b".split())
-        result, selectors = get_mus_program(
-            program=program,
-            answer_set=answer_set,
-            query_atom=query_atom,
-        )
-        assert result is None
+        self.check_query(
+            program="""
+            {a}.
+            b :- a.
+            """,
+            query_atom="a b",
+            answer_set="a b",
+            selectors=None 
+        )  
+        
+    def test_not_removed_in_ground(self):
+        self.check_query(
+            program="""
+            a.
+            b:- not a.
+            """,
+            query_atom="b",
+            answer_set="a",
+            selectors=["__mus__(program,0)"]
+        )  
+        

@@ -1,6 +1,7 @@
 from dumbo_asp.primitives import SymbolicAtom, SymbolicProgram, Model, GroundAtom
 
-from ucorexplain import get_mus_program, print_output, move_up, program_from_files, print_selectors
+from ucorexplain import get_mus_program_and_selectors , print_output, move_up, program_from_files, print_selectors
+from ucorexplain.meta import run_meta
 
 program = program_from_files(["examples/sudoku/instance1.lp","examples/sudoku/encoding.lp"])
 program = program.expand_global_safe_variables(rule=program[-3], variables=["Row"])
@@ -32,11 +33,11 @@ answer_set = move_up(answer_set, SymbolicAtom.parse(f"assign((Row, {query_col}),
 answer_set = move_up(answer_set, SymbolicAtom.parse(f"assign(({query_row}, Col), Value)"))
 
 query_atom = GroundAtom.parse(f"assign(({query_row},{query_col}),{query_val})")
-mus_program, selectors = get_mus_program(
+mus_program, selectors = get_mus_program_and_selectors(
     program=program,
-    answer_set=answer_set,
+    answer_set=tuple((a,True) for a in answer_set),
     query_atom=query_atom,
 )
 
-print_output(query_atom, mus_program, selectors)
-print_selectors(selectors)
+explanation = run_meta(mus_program,selectors, i=10)
+
