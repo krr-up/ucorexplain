@@ -7,7 +7,7 @@ from typing import Final, Optional, Union, Sequence
 
 import clingo
 import typeguard
-from dumbo_asp.primitives import SymbolicAtom, SymbolicRule, SymbolicProgram, Model, GroundAtom
+from dumbo_asp.primitives import SymbolicAtom, SymbolicRule, SymbolicProgram, Model, GroundAtom, Predicate
 from dumbo_utils.console import console
 from rich.progress import Progress
 
@@ -74,13 +74,25 @@ def build_extended_program_and_selectors(
     rules = [rule.with_extended_body(SymbolicAtom.parse(f"{mus_predicate}(program,{index})"))
              for index, rule in enumerate(program)]
 
+    false_predicate: Final = Predicate.false().name
+    atoms_in_the_answer_set = set(element if type(element) is GroundAtom else element[0] for element in answer_set)
+
     constraints = answer_set_to_constraints(answer_set, query_atom, mus_predicate)
-    extended_program = SymbolicProgram.of(rules, constraints, SymbolicRule.parse(
-        "{" +
-        f"{mus_predicate}(program,0..{len(rules) - 1})" +
-        (f"; {mus_predicate}(answer_set,0..{len(constraints) - 2})" if len(constraints) > 1 else "") +
-        "}."
-    ))
+    extended_program = SymbolicProgram.of(
+        rules,
+        constraints,
+        SymbolicRule.parse(
+            "{" +
+            f"{mus_predicate}(program,0..{len(rules) - 1})" +
+            (f"; {mus_predicate}(answer_set,0..{len(constraints) - 2})" if len(constraints) > 1 else "") +
+            "}."
+        ),
+        # MALVI: WE STILL NEED SOMETHING FROM to_zero_simplification_version()
+        SymbolicRule.parse(' | '.join(str(atom) for atom in atoms_in_the_answer_set) + f" :- {false_predicate}."),
+        SymbolicRule.parse(f"{{{false_predicate}}}."),
+        SymbolicRule.parse(f":- {false_predicate}."),
+    )
+
     selectors = [GroundAtom.parse(f"{mus_predicate}(program,{index})") for index in range(len(rules))] + \
         [GroundAtom.parse(f"{mus_predicate}(answer_set,{index})") for index in range(len(constraints) - 1)]
     return extended_program, selectors
@@ -90,7 +102,9 @@ def build_control_and_maps(
         extended_program: SymbolicProgram,
         mus_predicate: str,
 ):
-    control = clingo.Control()
+    # SHOULD WE GO FOR PROPAGATION RULES USED FOR COMPUTING SUPPORT MODELS? THAT IS, WE DON'T WANT TO USE WELL FOUNDED COMPUTATION...
+    control = clingo.Control(["--supp-models", "--no-ufs-check", "--sat-prepro=no", "--eq=0", "--no-backprop"])
+    # control = clingo.Control()
     control.add(str(extended_program))
     control.ground([("base", [])])
     selector_to_literal = {}
@@ -128,7 +142,7 @@ def check(
 ) -> Optional[list[GroundAtom]]:
     def on_core(core):
         on_core.res = core
-    on_core.res = []
+    on_core.res = None
 
     control.solve(assumptions=[selector_to_literal[selector] for selector in with_selectors] + [-1],
                   on_core=on_core)
@@ -202,6 +216,7 @@ def explain(
     ]
 
     selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(selector)} *%" for selector in selectors)
+    extended_program = SymbolicProgram.of([rule for rule in extended_program][:-3])  # MALVI: DISCARD rules with __false__
     return SymbolicProgram.parse(f"{extended_program}\n%* the selectors causing the inference *%\n{selectors_program}")
 
 
