@@ -4,7 +4,10 @@ Test cases for main application functionality.
 from typing import Optional
 from unittest import TestCase
 
-from dumbo_asp.primitives import GroundAtom, Model, SymbolicProgram
+import clingo
+import pytest
+from dumbo_asp.primitives import SymbolicProgram, Model, GroundAtom, SymbolicAtom, Predicate, SymbolicRule
+from dumbo_asp.queries import open_graph_in_xasp_navigator
 
 from ucorexplain import (
     answer_set_element_to_string,
@@ -50,6 +53,22 @@ class TestMain(TestCase):
         """
 
         program = SymbolicProgram.parse(program)
+        # the_answer_set = []
+        # if answer_set:
+        #     for atom in answer_set.split(' '):
+        #         the_answer_set.append(
+        #             (GroundAtom.parse(atom[1:]), False) if atom.startswith('~') else (GroundAtom.parse(atom), True)
+        #         )
+        # # ALL ATOMS THAT ARE NOT MENTIONED IN THE ANSWER SET ARE FALSE.
+        # # IF WE WANT THE USER TO SPECIFY ALL ATOMS THAT ARE TRUE, WE CAN MOVE THIS CODE IN THE explain() FUNCTION.
+        # atoms_in_the_answer_set = set(element[0] for element in the_answer_set)
+        # herbrand_base = the_program.to_zero_simplification_version(
+        #     extra_atoms=atoms_in_the_answer_set,
+        #     compact=True
+        # ).herbrand_base_without_false_predicate
+        # for atom in herbrand_base:
+        #     if atom not in atoms_in_the_answer_set:
+        #         the_answer_set.append((atom, False))
 
         answer_set = get_answer_set(answer_set)
         query = tuple(GroundAtom.parse(atom) for atom in query_atom.split(" "))
@@ -119,19 +138,19 @@ class TestMain(TestCase):
         self.check_query(
             program="""
             {a;b;c}.
-            :- not a, not b, not c.
+            :- not a, not b, c.
             :- not a, b.
             :- a, not b.
             :- a, b.
             """,
             query_atom="c a b",
-            answer_set="c",
-            selectors=None,
+            answer_set="c ~a ~b",
+            selectors=None
         )
 
     def test_well_founded_inference_1(self):
         """
-        A simple unfounded loop. Falsity of atom a is explained with no selectors: atom a is false wrt. any subprogram.
+        Well-founded computation is disabled, so falsity of a is established after assuming the falsity of b.
         """
         self.check_query(
             program="""
@@ -139,13 +158,15 @@ class TestMain(TestCase):
             b :- a.
             """,
             query_atom="a",
-            answer_set="",
-            selectors=[],
+            answer_set="~a ~b",
+            selectors=[
+            "__mus__(answer_set,0).  %* not b *%"
+            ]
         )
 
     def test_well_founded_inference_2(self):
         """
-        A simple unfounded loop after "guessing" c false: atom a is false wrt. any subprogram if atom c is false.
+        Falsity of a is established after assuming falsity of c and b.
         """
         self.check_query(
             program="""
@@ -155,8 +176,11 @@ class TestMain(TestCase):
             b :- a.
             """,
             query_atom="a",
-            answer_set="~c",
-            selectors=["__mus__(answer_set,0).  %* not c *%"],
+            answer_set="~c ~b ~a",
+            selectors=[
+            "__mus__(answer_set,0).  %* not c *%",
+            "__mus__(answer_set,1).  %* not b *%",
+            ]
         )
 
     def test_well_founded_inference_3(self):
@@ -355,3 +379,229 @@ class TestMain(TestCase):
             answer_set="a",
             selectors=["__mus__(program,0)"],
         )
+        assert result is None
+
+        assert result is None
+
+    #@pytest.mark.skip(reason="TODO: Structure the code in this 'test' so that we can call it in a convenient way")
+    def test_foo(self):
+        program = SymbolicProgram.parse("""
+%*
+3 . . .
+. . . 2
+1 . . .
+. . . 1
+*%
+given((1,1), 3).
+given((2,4), 2).
+given((3,1), 1).
+given((4,4), 1).
+        
+{assign((Row, Col), Value) : Value = 1..4} = 1 :- Row = 1..4; Col = 1..4.
+% assign((Row, Col), Value) : Value = 1..4 :- Row = 1..4; Col = 1..4.
+:- given(Cell, Value), not assign(Cell, Value).
+
+:- block(Block, Cell); block(Block, Cell'), Cell != Cell'; assign(Cell, Value), assign(Cell', Value).
+:- block(Block, Cell'); Value = 1..4; not assign(Cell, Value) : block(Block, Cell).
+
+block((row, Row), (Row, Col)) :- Row = 1..4, Col = 1..4.
+block((col, Col), (Row, Col)) :- Row = 1..4, Col = 1..4.
+block((sub, Row', Col'), (Row, Col)) :- Row = 1..4; Col = 1..4; Row' = (Row-1) / 2; Col' = (Col-1) / 2.
+        """)
+
+        model = Model.of_program(program).filter(when=lambda atom: atom.predicate_name == 'assign')
+        #print(model.as_facts)
+        #assert False
+        query = GroundAtom.parse("assign((1,2),2)")
+
+        # COMPUTE THE HERBRAND BASE OF THE ZERO-SIMPLIFICATION VERSION (TO BE USED TO EXPAND VARIABLES OF THE INPUT PROGRAM)
+        herbrand_base = program.to_zero_simplification_version(
+            # extra_atoms=Model.of_program("any(extra,atom). that(make,sense). to. add."),
+            compact=True
+        ).herbrand_base_without_false_predicate
+
+        # LET USERS EXPAND THE VARIABLES THEY LIKE AND REORDER THE PROGRAM AS THEY WISH
+        program = program.expand_global_safe_variables(rule=program[-5], variables=["Block"], herbrand_base=herbrand_base)
+        program = program.move_up(SymbolicAtom.parse("block(Block, Cell)"))
+
+        # COMPUTE THE SELECTORS, THEN EXPAND ALL VARIABLES AND SERIALIZE THE GROUND PROGRAM
+        mus_program = explain(
+            program=program,
+            answer_set=tuple(atom for atom in model),
+            query_atom=query
+        )
+        #print(mus_program)
+        #assert False
+        mus_program = mus_program.expand_global_and_local_variables()
+        #with open("/tmp/foo", "w") as f:
+        #    f.write(str(mus_program))
+        #assert False
+        serialization = Model.of_program(SymbolicProgram.parse(Model.of_atoms(mus_program.serialize(
+            base64_encode=False,
+        )).as_facts + """
+head_bounds(Rule, LowerBound, UpperBound) :-
+  rule(Rule), choice(Rule, LowerBound, UpperBound).
+head_bounds(Rule, 1, Size) :- 
+  rule(Rule), not choice(Rule,_,_); 
+  Size = #count{HeadAtom : head(Rule, HeadAtom)}.
+
+atom(Atom) :- head(Rule, Atom).
+atom(Atom) :- pos_body(Rule, Atom).
+atom(Atom) :- neg_body(Rule, Atom).        
+        """ + f'query("{query}").'))
+        # print("\n\n\n*** SERIALIZATION ***\n\n")
+        # print(serialization.as_facts)
+        # # print(mus_program.serialize(
+        # #     base64_encode=False,
+        # # ).as_facts)
+        # assert False
+
+        # META-ENCODING FOR THE PROPAGATION
+        derivation_sequence = []
+        propagate_program = serialization.as_facts + """
+:- atom(Atom), #count{Value, Reason : assign(Atom, Value, Reason)} > 1.
+:- query(Atom), not assign(Atom, _, _).
+
+{assign(HeadAtom, true, (support, Rule))} :-
+  rule(Rule), head_bounds(Rule, LowerBound, UpperBound);
+  head(Rule, HeadAtom), #sum{1, Atom : head(Rule, Atom); -1, Atom : head(Rule, Atom), assign(Atom, false, _)} = LowerBound;
+  assign(BodyAtom, true, _) : pos_body(Rule, BodyAtom);
+  assign(BodyAtom, false, _) : neg_body(Rule, BodyAtom).
+
+{assign(HeadAtom, false, (choice, Rule))} :-
+  rule(Rule), head_bounds(Rule, LowerBound, UpperBound);
+  head(Rule, HeadAtom), #count{Atom : head(Rule, Atom), assign(Atom, true, _), Atom != HeadAtom} = UpperBound;
+  assign(BodyAtom, true, _) : pos_body(Rule, BodyAtom);
+  assign(BodyAtom, false, _) : neg_body(Rule, BodyAtom).
+
+false_body(Rule, Atom) :-
+  rule(Rule), pos_body(Rule, Atom), assign(Atom, false, _).
+false_body(Rule, Atom) :-
+  rule(Rule), neg_body(Rule, Atom), assign(Atom, true, _).
+
+{assign(Atom, false, (lack_of_support,))} :-
+  atom(Atom);
+  false_body(Rule, _) : head(Rule, Atom).
+
+last_support(Rule, Atom) :-
+  assign(Atom, true, _), head(Rule, Atom);
+  #count{Rule' : head(Rule', Atom), not false_body(Rule', _)} = 1.
+  
+{assign(BodyAtom, true, (last_support, Rule, Atom))} :-
+  last_support(Rule, Atom);
+  pos_body(Rule, BodyAtom).
+{assign(BodyAtom, false, (last_support, Rule, Atom))} :-
+  last_support(Rule, Atom);
+  neg_body(Rule, BodyAtom).
+
+constraint(Rule) :-
+  rule(Rule), head_bounds(Rule, LowerBound, UpperBound);
+  #count{Atom : head(Rule, Atom), assign(Atom, true, _)} > UpperBound.
+constraint(Rule) :-
+  rule(Rule), head_bounds(Rule, LowerBound, UpperBound);
+  #sum{1, Atom : head(Rule, Atom); -1, Atom : head(Rule, Atom), assign(Atom, false, _)} < LowerBound.
+
+{assign(Atom, false, (constraint, Rule))} :-
+  constraint(Rule), pos_body(Rule, Atom);
+  assign(Atom', true, _) : pos_body(Rule, Atom'), Atom' != Atom;
+  assign(Atom', false, _) : neg_body(Rule,Atom').
+{assign(Atom, true, (constraint, Rule))} :-
+  constraint(Rule), neg_body(Rule, Atom);
+  assign(Atom', true, _) : pos_body(Rule, Atom');
+  assign(Atom', false, _) : neg_body(Rule,Atom'), Atom' != Atom.
+  
+#show.
+#show assign/3.
+#show false_body/2.
+        """
+        #with open("/tmp/foo", "w") as f:
+        #    f.write(str(propagate_program))
+        #assert False
+        control = clingo.Control()
+        control.add(str(propagate_program))
+        control.ground([("base", [])])
+        def m(atoms):
+            for atom in atoms.symbols(shown=True):
+                at = GroundAtom.parse(str(atom))
+                derivation_sequence.append(f"{at.predicate_name}({','.join(str(arg) for arg in at.arguments)},{len(derivation_sequence) + 1})")
+        control.solve(on_model=m)
+        derivation_sequence = Model.of_atoms(derivation_sequence)
+        # WARNING! Here I'm assuming that atoms are ordered according to the derivation in the solver. If it is not, we need a propagator or something different
+
+        #print("\n\n\n***\n\n")
+        #print(derivation_sequence.as_facts)
+        #assert False
+
+        # BUILD GRAPH WITH ANOTHER META-ENCODING
+        # I'M HIDING THE __mus__ ATOMS, BUT WE CAN OPT FOR SOMETHING DIFFERENT
+        graph_program = SymbolicProgram.parse(serialization.as_facts + derivation_sequence.as_facts + """
+link(Atom, BodyAtom) :-
+  assign(Atom, _, (support, Rule), _);
+  pos_body(Rule, BodyAtom).
+link(Atom, BodyAtom) :-
+  assign(Atom, _, (support, Rule), _);
+  neg_body(Rule, BodyAtom).
+link(Atom, HeadAtom) :-
+  assign(Atom, _, (support, Rule), _);
+  head(Rule, HeadAtom), assign(HeadAtom, false, _, _).
+
+link(Atom, BodyAtom) :-
+  assign(Atom, _, (choice, Rule), _);
+  pos_body(Rule, BodyAtom).
+link(Atom, BodyAtom) :-
+  assign(Atom, _, (choice, Rule), _);
+  neg_body(Rule, BodyAtom).
+link(Atom, HeadAtom) :-
+  assign(Atom, _, (choice, Rule), Index);
+  head(Rule, HeadAtom), assign(HeadAtom, true, _, Index'), Index' < Index.
+
+{link(Atom, Atom'): false_body(Rule, Atom', Index'), Index' < Index} = 1 :-
+  assign(Atom, _, (lack_of_support,), Index);
+  head(Rule, Atom).
+  % disj rule?
+
+%link(HeadAtom, Atom) :-
+%  assign(Atom, _, (last_support, Rule, Atom), Index);
+%  head(Rule, HeadAtom), assign(HeadAtom, _, _, Index'), Index' < Index.
+% handle disjunctive rules?
+link(BodyAtom, Atom) :-
+  assign(BodyAtom, _, (last_support, Rule, Atom), _).
+{link(BodyAtom, Atom'): false_body(Rule', Atom', Index'), Index' < Index} = 1 :-
+  assign(BodyAtom, _, (last_support, Rule, Atom), Index);
+  head(Rule', Atom), false_body(Rule, Atom, _).
+
+link(Atom, HeadAtom) :-
+  assign(Atom, _, (constraint, Rule), Index);
+  head(Rule, HeadAtom), assign(HeadAtom, _, _, Index'), Index' < Index.
+link(Atom, BodyAtom) :-
+  assign(Atom, _, (constraint, Rule), _);
+  pos_body(Rule, BodyAtom), BodyAtom != Atom.
+link(Atom, BodyAtom) :-
+  assign(Atom, _, (constraint, Rule), _);
+  neg_body(Rule, BodyAtom), BodyAtom != Atom.
+
+reach(Atom) :- query(Atom).
+reach(Atom') :- reach(Atom), link(Atom, Atom'), not hide(Atom').
+
+hide(Atom) :- head(Rule, Atom); not pos_body(Rule,_); not neg_body(Rule,_).
+
+%#show.
+%#show node(X,V,R) : assign(X,V,R,_), reach(X).
+%#show link(X,Y) : link(X,Y), reach(X), reach(Y).
+node(X,V,R) :- assign(X,V,R,_), reach(X).
+link'(X,Y) :- link(X,Y), reach(X), reach(Y).
+        """)
+        #with open("/tmp/foo", "w") as f:
+        #   f.write(str(graph_program))
+        #assert False
+
+        # SHOW THE GRAPH IN THE NAVIGATOR (IT NEEDS SOME WORK TO GIVE MORE FREEDOM ON COLORS AND LABELS)
+        open_graph_in_xasp_navigator(
+            Model.of_program(graph_program)
+            .filter(when=lambda atom: atom.predicate_name in ["node", "link'"])
+            .rename(Predicate.parse("link'"), Predicate.parse("link"))
+        )
+
+        assert False
+
+

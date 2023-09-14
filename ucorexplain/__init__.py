@@ -13,6 +13,7 @@ from dumbo_asp.primitives import (
     SymbolicAtom,
     SymbolicProgram,
     SymbolicRule,
+    Predicate
 )
 from dumbo_utils.console import console
 from rich.progress import Progress
@@ -97,6 +98,9 @@ def build_extended_program_and_possible_selectors(
         for index, rule in enumerate(program)
     ]
 
+    false_predicate: Final = Predicate.false().name
+    atoms_in_the_answer_set = set(element if type(element) is GroundAtom else element[0] for element in answer_set)
+
     constraints = answer_set_to_constraints(answer_set, query_atom, mus_predicate)
     extended_program = SymbolicProgram.of(
         rules,
@@ -111,6 +115,10 @@ def build_extended_program_and_possible_selectors(
             )
             + "}."
         ),
+        # MALVI: WE STILL NEED SOMETHING FROM to_zero_simplification_version()
+        SymbolicRule.parse(' | '.join(str(atom) for atom in atoms_in_the_answer_set) + f" :- {false_predicate}."),
+        SymbolicRule.parse(f"{{{false_predicate}}}."),
+        SymbolicRule.parse(f":- {false_predicate}."),
     )
     selectors = [
         GroundAtom.parse(f"{mus_predicate}(program,{index})")
@@ -126,8 +134,10 @@ def build_control_and_maps(
     extended_program: str,
     mus_predicate: str,
 ):
-    control = clingo.Control(["--warn=none"])
-    control.add(extended_program)
+    # SHOULD WE GO FOR PROPAGATION RULES USED FOR COMPUTING SUPPORT MODELS? THAT IS, WE DON'T WANT TO USE WELL FOUNDED COMPUTATION...
+    control = clingo.Control(["--supp-models", "--no-ufs-check", "--sat-prepro=no", "--eq=0", "--no-backprop"])
+    # control = clingo.Control()
+    control.add(str(extended_program))
     control.ground([("base", [])])
     selector_to_literal = {}
     literal_to_selector = {}
@@ -214,6 +224,8 @@ def get_selectors(extended_program_, mus_predicate, all_selectors):
         )
         assert result is not None
         selectors = result
+    
+    extended_program = SymbolicProgram.of([rule for rule in extended_program][:-3])  # MALVI: DISCARD rules with __false__
 
     print_with_title("SELECTORS", selectors)
     return selectors
