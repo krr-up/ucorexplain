@@ -380,7 +380,7 @@ class TestMain(TestCase):
         )
         assert result is None
 
-    #@pytest.mark.skip(reason="Structure the code in this 'test' so that we can call it in a convenient way")
+    @pytest.mark.skip(reason="Structure the code in this 'test' so that we can call it in a convenient way")
     def test_foo(self):
         program = SymbolicProgram.parse("""
 %*
