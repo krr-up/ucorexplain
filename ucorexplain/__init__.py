@@ -30,10 +30,10 @@ def unpack_answer_set_element(element: AnswerSetElement) -> tuple[GroundAtom, bo
     return element, True
 
 
-def answer_set_element_to_string(element: AnswerSetElement) -> str:
+def answer_set_element_to_string(element: AnswerSetElement, *, flip: bool = False) -> str:
     if type(element) == GroundAtom:
         element = (element, True)
-    return f"{'' if element[1] else 'not '}{element[0]}"
+    return f"{'' if element[1] != flip else 'not '}{element[0]}"
 
 
 def move_up(answer_set: AnswerSet, *pattern: SymbolicAtom) -> AnswerSet:
@@ -69,18 +69,15 @@ def answer_set_to_constraints(
     for element in answer_set:
         atom, truth_value = unpack_answer_set_element(element)
         if atom in query_atoms:
-            if truth_value:
-                query_literals.append(f" {answer_set_element_to_string(atom)}")
-            else:
-                query_literals.append(f" not {answer_set_element_to_string(atom)}")
+            query_literals.append(answer_set_element_to_string(element, flip=False))
             query_atoms.remove(atom)
         else:
             constraints.append(
-                f":- not {answer_set_element_to_string(element)}, {mus_predicate}(answer_set,{len(constraints)})"
+                f":- {answer_set_element_to_string(element, flip=True)}, {mus_predicate}(answer_set,{len(constraints)})"
                 f"  %* Answer set *% ."
             )
     for atom in query_atoms:
-        query_literals.append(f" {answer_set_element_to_string(atom)}")
+        query_literals.append(answer_set_element_to_string(atom, flip=True))
 
     return [SymbolicRule.parse(constraint) for constraint in constraints] + [
         SymbolicRule.parse(f"{mus_predicate} :- {', '.join(query_literals)}.")
