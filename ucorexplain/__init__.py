@@ -127,6 +127,8 @@ def build_extended_program_and_possible_selectors(
         GroundAtom.parse(f"{mus_predicate}(answer_set,{index})")
         for index in range(len(constraints) - 1)
     ]
+    print_with_title("EXTENDED PROGRAM", extended_program)
+
     return extended_program, selectors
 
 
@@ -223,9 +225,7 @@ def get_selectors(extended_program_, mus_predicate, all_selectors):
             selector_to_literal=selector_to_literal,
         )
         assert result is not None
-        selectors = result
-    
-    extended_program = SymbolicProgram.of([rule for rule in extended_program][:-3])  # MALVI: DISCARD rules with __false__
+        selectors = result    
 
     print_with_title("SELECTORS", selectors)
     return selectors
@@ -269,7 +269,7 @@ def get_answer_set(answer_set_str):
     return tuple(answer_set)
 
 
-def get_herbrand(program, known_atoms):
+def get_herbrand_choices(program, known_atoms):
     """
     Adds choices for the known atoms and computes the herbrand base
     """
@@ -282,6 +282,25 @@ def get_herbrand(program, known_atoms):
     print_with_title("HERBRAND BASE", herbrand)
     return herbrand
 
+def get_herbrand_zero(program, known_atoms, compact=True):
+    """
+    Adds choices for the known atoms and computes the herbrand base
+    """
+    program_with_false = program.to_zero_simplification_version(
+        extra_atoms=known_atoms,
+        compact=compact
+    )
+    print_with_title("PROGRAM WITH FALSE", program_with_false)
+    herbrand = program_with_false.herbrand_base_without_false_predicate
+    print_with_title("HERBRAND BASE", herbrand)
+    return herbrand
+
+def remove_false(extended_program):
+    """
+    Removes rules using __false__ added in the build_extended_program_and_possible_selectors method
+    This is just the last three rules that are added.
+    """
+    return SymbolicProgram.of([rule for rule in extended_program][:-3])  # MALVI: DISCARD rules with __false__
 
 def print_with_title(title, value):
     console.print(f"[bold red]{title}:[/bold red]")
@@ -329,26 +348,33 @@ def get_mus_program_and_selectors(
     """
     Builds MUS program extended with  with externals and the needed selectors
     """
-    full_query = list(query_atom) if type(query_atom) == tuple else [query_atom]
-    # Get full herbrand based on query and answer
     atoms_in_answer_set = set(element[0] for element in answer_set)
-    known_atoms = set(list(atoms_in_answer_set) + full_query)
-    herbrand = get_herbrand(program, known_atoms)
+    
+    
+    # Get full herbrand based on query and answer
+    # full_query = list(query_atom) if type(query_atom) == tuple else [query_atom]
+    # known_atoms = set(list(atoms_in_answer_set) + full_query) # PREVIOUS VERSION
+    # herbrand = get_herbrand_choice(program, known_atoms)# PREVIOUS VERSION
+
+    herbrand_base = get_herbrand_zero(program, atoms_in_answer_set)
 
     # Add atoms from herbrand to answer set
-    answer_set = extend_answer_set(answer_set, herbrand)
+    answer_set = extend_answer_set(answer_set, herbrand_base)
 
     # Get MUS program
     extended_program, all_selectors = build_extended_program_and_possible_selectors(
         program, answer_set, query_atom, MUS_PREDICATE
     )
 
-    extended_program_with_externals = extend_program_with_externals(
-        extended_program, herbrand
-    )
+    # extended_program_with_externals = extend_program_with_externals(
+    #     extended_program, herbrand
+    # ) # PREVIOUS VERSION
 
     selectors = get_selectors(
-        extended_program_with_externals, MUS_PREDICATE, all_selectors
+        extended_program, MUS_PREDICATE, all_selectors
     )
 
-    return extended_program_with_externals, selectors
+    # Remove __false__ from rules
+    extended_program = remove_false(extended_program)
+
+    return extended_program, selectors

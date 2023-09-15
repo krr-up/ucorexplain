@@ -53,23 +53,6 @@ class TestMain(TestCase):
         """
 
         program = SymbolicProgram.parse(program)
-        # the_answer_set = []
-        # if answer_set:
-        #     for atom in answer_set.split(' '):
-        #         the_answer_set.append(
-        #             (GroundAtom.parse(atom[1:]), False) if atom.startswith('~') else (GroundAtom.parse(atom), True)
-        #         )
-        # # ALL ATOMS THAT ARE NOT MENTIONED IN THE ANSWER SET ARE FALSE.
-        # # IF WE WANT THE USER TO SPECIFY ALL ATOMS THAT ARE TRUE, WE CAN MOVE THIS CODE IN THE explain() FUNCTION.
-        # atoms_in_the_answer_set = set(element[0] for element in the_answer_set)
-        # herbrand_base = the_program.to_zero_simplification_version(
-        #     extra_atoms=atoms_in_the_answer_set,
-        #     compact=True
-        # ).herbrand_base_without_false_predicate
-        # for atom in herbrand_base:
-        #     if atom not in atoms_in_the_answer_set:
-        #         the_answer_set.append((atom, False))
-
         answer_set = get_answer_set(answer_set)
         query = tuple(GroundAtom.parse(atom) for atom in query_atom.split(" "))
 
@@ -379,9 +362,7 @@ class TestMain(TestCase):
             answer_set="a",
             selectors=["__mus__(program,0)"],
         )
-        assert result is None
 
-        assert result is None
 
     @pytest.mark.skip(reason="Structure the code in this 'test' so that we can call it in a convenient way")
     def test_foo(self):
