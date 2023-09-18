@@ -1,3 +1,4 @@
+import clingo
 from dumbo_asp.primitives import SymbolicAtom, SymbolicProgram, Model, GroundAtom
 
 from ucorexplain import extend_answer_set, get_selectors, remove_false, build_extended_program_and_possible_selectors, print_output, move_up, program_from_files, print_selectors, MUS_PREDICATE, get_herbrand_zero
@@ -5,7 +6,6 @@ from ucorexplain import extend_answer_set, get_selectors, remove_false, build_ex
 program = program_from_files(["examples/sudoku/instance4x4.lp","examples/sudoku/encoding4x4.lp"])
 
 atoms_in_answer_set = Model.of_program(program).filter(when=lambda atom: atom.predicate_name == 'assign')
-print(atoms_in_answer_set)
 answer_set = tuple([tuple([a,True]) for a in atoms_in_answer_set])
 
 #print(model.as_facts)
@@ -34,17 +34,27 @@ selectors = get_selectors(
 extended_program = remove_false(extended_program)
 
 
-# ------------ Tested until here
-
-
-
-
+# Ground program manually
 expanded_prg = extended_program.expand_global_and_local_variables()
 
-# Error
-serialized = expanded_prg.serialize(base64_encode=False)
+# Reify
+expanded_prg_facts = Model.of_atoms(expanded_prg.serialize(base64_encode=False)).as_facts
+expanded_prg_program = SymbolicProgram.parse(expanded_prg_facts)
+reify_program = program_from_files(["ucorexplain/encodings/mario_reify.lp"])
+query_program = SymbolicProgram.parse(f"query({query_atom}).")
+full_program = SymbolicProgram.of(*reify_program, *expanded_prg_program, *query_program)
+reified_program = Model.of_program(full_program).as_facts
 
-# ------- Next steps
-# Call mario_reify together with the query 
-
-# Call mario_meta with the reiified encoding
+# Get derivation
+derivation_sequence = []
+ctl = clingo.Control(["1"])
+ctl.load("ucorexplain/encodings/mario_meta.lp")
+ctl.add("base",[],reified_program)
+ctl.ground([("base", [])])
+def m(atoms):
+    print("model")
+    for atom in atoms.symbols(shown=True):
+        at = GroundAtom.parse(str(atom))
+        derivation_sequence.append(f"{at.predicate_name}({','.join(str(arg) for arg in at.arguments)},{len(derivation_sequence) + 1})")
+ctl.solve(on_model=m)
+derivation_sequence = Model.of_atoms(derivation_sequence)

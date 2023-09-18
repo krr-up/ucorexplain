@@ -48,8 +48,8 @@ def program_from_files(files) -> SymbolicProgram:
     prg_str = ""
     for f in files:
         with open(f) as f:
-            prg_str += "\n".join(f.readlines())
-
+            prg_str += "".join(f.readlines())
+    print(prg_str)
     return SymbolicProgram.parse(prg_str)
 
 
