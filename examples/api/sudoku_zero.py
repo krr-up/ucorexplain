@@ -1,7 +1,7 @@
-import clingo
-from dumbo_asp.primitives import SymbolicAtom, SymbolicProgram, Model, GroundAtom, Predicate
+# import clingo
+# from dumbo_asp.primitives import SymbolicAtom, SymbolicProgram, Model, GroundAtom, Predicate
 
-from ucorexplain import extend_answer_set, get_selectors, remove_false, build_extended_program_and_possible_selectors, print_output, move_up, program_from_files, print_selectors, MUS_PREDICATE, get_herbrand_zero
+from ucorexplain import *
 from dumbo_asp.queries import open_graph_in_xasp_navigator
 
 
@@ -41,39 +41,18 @@ expanded_prg_with_selectors = SymbolicProgram.of(*extended_program, *selectors_p
 # Ground program manually
 expanded_prg = expanded_prg_with_selectors.expand_global_and_local_variables()
 
-# Reify
-expanded_prg_facts = Model.of_atoms(expanded_prg.serialize(base64_encode=False)).as_facts
-expanded_prg_program = SymbolicProgram.parse(expanded_prg_facts)
-reify_program = program_from_files(["ucorexplain/encodings/mario_reify.lp"])
-query_program = SymbolicProgram.parse(f'query("{query_atom}").')
-serialization_program = SymbolicProgram.of(*reify_program, *expanded_prg_program, *query_program)
+# Serialize
+serialization_program  = get_serialization_program(expanded_prg, query_atom)
 
-reified_program = Model.of_program(serialization_program).as_facts
+# Reify
+reified_program = get_reified_program(serialization_program)
 
 # Get derivation
-derivation_sequence = []
-ctl = clingo.Control(["1"])
-ctl.load("ucorexplain/encodings/mario_meta.lp")
-ctl.add("base",[],reified_program)
-ctl.ground([("base", [])])
-def m(atoms):
-    print("model")
-    for atom in atoms.symbols(shown=True):
-        at = GroundAtom.parse(str(atom))
-        derivation_sequence.append(f"{at.predicate_name}({','.join(str(arg) for arg in at.arguments)},{len(derivation_sequence) + 1})")
-ctl.solve(on_model=m)
-
-derivation_sequence_prg = SymbolicProgram.parse(Model.of_atoms(derivation_sequence).as_facts)
+derivation_sequence = get_derivation_sequence_program(reified_program)
 # WARNING! Here I'm assuming that atoms are ordered according to the derivation in the solver. If it is not, we need a propagator or something different
 
-graph_program = program_from_files(["ucorexplain/encodings/mario_graph.lp"])
-compute_graph_prg = SymbolicProgram.of(*graph_program, *derivation_sequence_prg, *serialization_program)
+# Get graph
+graph = get_graph(derivation_sequence, serialization_program)
 
-graph = Model.of_program(compute_graph_prg)
-graph = graph.filter(when=lambda atom: atom.predicate_name in ["node", "link'"])
-graph = graph.rename(Predicate.parse("link'"), Predicate.parse("link"))
-
-print("The graph")
-print(graph)
-
+# Show graph
 open_graph_in_xasp_navigator(graph)

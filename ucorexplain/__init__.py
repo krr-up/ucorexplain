@@ -49,7 +49,6 @@ def program_from_files(files) -> SymbolicProgram:
     for f in files:
         with open(f) as f:
             prg_str += "".join(f.readlines())
-    print(prg_str)
     return SymbolicProgram.parse(prg_str)
 
 
@@ -298,6 +297,46 @@ def remove_false(extended_program):
     This is just the last three rules that are added.
     """
     return SymbolicProgram.of([rule for rule in extended_program][:-3])  # MALVI: DISCARD rules with __false__
+
+def get_reified_program(prg):
+    reify_program = program_from_files(["ucorexplain/encodings/mario_reify.lp"])
+    full_prg = SymbolicProgram.of(*reify_program, *prg)
+    reified_program = Model.of_program(full_prg).as_facts
+    return reified_program
+
+def get_serialization_program(expanded_prg, query_atom):
+    expanded_prg_facts = Model.of_atoms(expanded_prg.serialize(base64_encode=False)).as_facts
+    expanded_prg_program = SymbolicProgram.parse(expanded_prg_facts)
+    query_program = SymbolicProgram.parse(f'query({clingo.String(str(query_atom))}).')
+    serialization_program = SymbolicProgram.of(*expanded_prg_program, *query_program)
+    return serialization_program
+
+def get_derivation_sequence_program(reified_program):
+    derivation_sequence = []
+    ctl = clingo.Control(["1"])
+    ctl.load("ucorexplain/encodings/mario_meta.lp")
+    ctl.add("base",[],reified_program)
+    ctl.ground([("base", [])])
+    def m(atoms):
+        for atom in atoms.symbols(shown=True):
+            at = GroundAtom.parse(str(atom))
+            derivation_sequence.append(f"{at.predicate_name}({','.join(str(arg) for arg in at.arguments)},{len(derivation_sequence) + 1})")
+    ctl.solve(on_model=m)
+
+    derivation_sequence_prg = SymbolicProgram.parse(Model.of_atoms(derivation_sequence).as_facts)
+    # WARNING! Here I'm assuming that atoms are ordered according to the derivation in the solver. If it is not, we need a propagator or something different
+    
+    return derivation_sequence_prg
+
+def get_graph(derivation_sequence_prg, serialization_program):
+    graph_program = program_from_files(["ucorexplain/encodings/mario_graph.lp"])
+    compute_graph_prg = SymbolicProgram.of(*graph_program, *derivation_sequence_prg, *serialization_program)
+
+    graph = Model.of_program(compute_graph_prg)
+    graph = graph.filter(when=lambda atom: atom.predicate_name in ["node", "link'"])
+    graph = graph.rename(Predicate.parse("link'"), Predicate.parse("link"))
+
+    return graph
 
 def print_with_title(title, value):
     console.print(f"[bold red]{title}:[/bold red]")
