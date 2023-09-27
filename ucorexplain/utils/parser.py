@@ -65,7 +65,4 @@ def get_parser() -> ArgumentParser:
 
     parser.add_argument("--query", "-q", help="Query atom", required=True)
 
-    parser.add_argument(
-        "--interval", "-i", help="interval for meta encoding", required=True
-    )
     return parser

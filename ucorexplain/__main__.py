@@ -15,10 +15,19 @@ from ucorexplain import (
     get_mus_program_and_selectors,
     print_with_title,
     program_from_files,
+    MUS_PREDICATE,
+    build_extended_program_and_possible_selectors,
+    get_selectors,
+    remove_false,
+    get_serialization_program,
+    get_reified_program,
+    get_derivation_sequence_program,
+    get_graph
 )
 
 from .meta import run_meta
 from .utils.parser import get_parser
+from dumbo_asp.queries import open_graph_in_xasp_navigator
 
 
 def main():
@@ -37,16 +46,34 @@ def main():
     # Query TODO extend for multiple atoms in query
     query_atom = GroundAtom.parse(args.query)
 
-    extended_program_with_externals, selectors = get_mus_program_and_selectors(
-        program, answer_set, query_atom
-    )
+    extended_program, all_selectors = build_extended_program_and_possible_selectors(
+        program, answer_set, query_atom, MUS_PREDICATE)
 
-    # TODO
-    # Get transforemed extended_program_with_externals and pass this to run meta
+    selectors = get_selectors(extended_program, MUS_PREDICATE, all_selectors)
+    selectors_prg = SymbolicProgram.parse(Model.of_atoms(selectors).as_facts)
 
-    # RUN meta
-    explanation = run_meta(extended_program_with_externals, selectors, i=args.interval)
+    # Remove __false__ from rules
+    extended_program = remove_false(extended_program)
+    expanded_prg_with_selectors = SymbolicProgram.of(*extended_program, *selectors_prg)
 
+    # Ground program manually
+    expanded_prg = expanded_prg_with_selectors.expand_global_and_local_variables()
+
+    # Serialize
+    serialization_program = get_serialization_program(expanded_prg, query_atom)
+
+    # Reify
+    reified_program = get_reified_program(serialization_program)
+
+    # Get derivation
+    derivation_sequence = get_derivation_sequence_program(reified_program)
+    # WARNING! Here I'm assuming that atoms are ordered according to the derivation in the solver. If it is not, we need a propagator or something different
+
+    # Get graph
+    graph = get_graph(derivation_sequence, serialization_program)
+
+    # Show graph
+    open_graph_in_xasp_navigator(graph)
 
 if __name__ == "__main__":
     main()

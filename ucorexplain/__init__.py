@@ -309,6 +309,8 @@ def get_serialization_program(expanded_prg, query_atom):
     expanded_prg_program = SymbolicProgram.parse(expanded_prg_facts)
     query_program = SymbolicProgram.parse(f'query({clingo.String(str(query_atom))}).')
     serialization_program = SymbolicProgram.of(*expanded_prg_program, *query_program)
+    print_with_title("SERIALIZATION PROGRAM", serialization_program)
+
     return serialization_program
 
 def get_derivation_sequence_program(reified_program):
@@ -325,6 +327,7 @@ def get_derivation_sequence_program(reified_program):
 
     derivation_sequence_prg = SymbolicProgram.parse(Model.of_atoms(derivation_sequence).as_facts)
     # WARNING! Here I'm assuming that atoms are ordered according to the derivation in the solver. If it is not, we need a propagator or something different
+    print_with_title("DERIVATION SEQUENCE", derivation_sequence_prg)
     
     return derivation_sequence_prg
 
@@ -335,6 +338,7 @@ def get_graph(derivation_sequence_prg, serialization_program):
     graph = Model.of_program(compute_graph_prg)
     graph = graph.filter(when=lambda atom: atom.predicate_name in ["node", "link'"])
     graph = graph.rename(Predicate.parse("link'"), Predicate.parse("link"))
+    print_with_title("GRAPH", derivation_sequence_prg)
 
     return graph
 
