@@ -168,27 +168,25 @@ def build_control_and_maps(
     return control, selector_to_literal, literal_to_selector
 
 
-def check(
+def trim_selectors(
     control: clingo.Control,
-    with_selectors: list[GroundAtom],
+    selectors: list[GroundAtom],
     selector_to_literal: dict[GroundAtom, int],
-    literal_to_selector: dict[int, GroundAtom],
-) -> Optional[list[GroundAtom]]:
+) -> None:
     def on_core(core):
         on_core.res = core
 
     on_core.res = []
     control.solve(
-        assumptions=[selector_to_literal[selector] for selector in with_selectors]
+        assumptions=[selector_to_literal[selector] for selector in selectors]
         + [-1],
         on_core=on_core,
     )
     if on_core.res is not None and (len(on_core.res) == 0 or on_core.res[-1] != -1):
-        return [
-            literal_to_selector[literal]
-            for literal in on_core.res
-            if literal in literal_to_selector
-        ]
+        while selectors and selector_to_literal[selectors[-1]] not in on_core.res:
+            selectors.pop()
+    else:
+        selectors.clear()
 
 
 def get_selectors(extended_program_, mus_predicate, all_selectors):
@@ -196,17 +194,11 @@ def get_selectors(extended_program_, mus_predicate, all_selectors):
         extended_program_, mus_predicate
     )
     selectors = all_selectors
-    result = check(
+    trim_selectors(
         control=control,
-        with_selectors=selectors,
-        literal_to_selector=literal_to_selector,
+        selectors=selectors,
         selector_to_literal=selector_to_literal,
     )
-    if result is None:
-        selectors = []
-        print_with_title("SELECTORS", selectors)
-        return selectors
-    selectors = result
 
     required_selectors = 0
     while required_selectors < len(selectors):
@@ -214,14 +206,11 @@ def get_selectors(extended_program_, mus_predicate, all_selectors):
         selectors.insert(
             0, selectors.pop()
         )  # last selector is required... move it ahead
-        result = check(
+        trim_selectors(
             control=control,
-            with_selectors=selectors,
-            literal_to_selector=literal_to_selector,
+            selectors=selectors,
             selector_to_literal=selector_to_literal,
         )
-        assert result is not None
-        selectors = result    
 
     print_with_title("SELECTORS", selectors)
     return selectors

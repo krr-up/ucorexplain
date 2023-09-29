@@ -4,10 +4,7 @@ Test cases for main application functionality.
 from typing import Optional
 from unittest import TestCase
 
-import clingo
-import pytest
-from dumbo_asp.primitives import SymbolicProgram, Model, GroundAtom, SymbolicAtom, Predicate, SymbolicRule
-from dumbo_asp.queries import open_graph_in_xasp_navigator
+from dumbo_asp.primitives import SymbolicProgram, GroundAtom
 
 from ucorexplain import (
     answer_set_element_to_string,
@@ -29,15 +26,12 @@ class TestMain(TestCase):
         if selectors is None:
             assert len(selectors_found) == 0
             return
-        selectors_found_list = [
-            answer_set_element_to_string(s) for s in selectors_found
-        ]
-        for s in selectors:
-            assert s.split(".")[0] in selectors_found_list
+        selectors_found_set = set(answer_set_element_to_string(s) for s in selectors_found)
+        assert selectors_found_set == set(s.split(".")[0] for s in selectors)
 
     @staticmethod
     def check_query(
-        program: str, query_atom: str, answer_set: str, selectors: Optional[str]
+        program: str, query_atom: str, answer_set: str, selectors: Optional[list]
     ):
         """
         Check if the query against the program and answer set produces the selectors in answer.
@@ -149,7 +143,7 @@ class TestMain(TestCase):
 
     def test_well_founded_inference_2(self):
         """
-        Falsity of a is established after assuming falsity of c and b.
+        Falsity of a is established after assuming falsity of b due to the rule b :- a.
         """
         self.check_query(
             program="""
@@ -161,7 +155,7 @@ class TestMain(TestCase):
             query_atom="a",
             answer_set="~c ~b ~a",
             selectors=[
-            "__mus__(answer_set,0).  %* not c *%",
+            "__mus__(program,3).",
             "__mus__(answer_set,1).  %* not b *%",
             ]
         )
@@ -322,22 +316,6 @@ class TestMain(TestCase):
                 "__mus__(program,2).  %* d:-c. *%",
                 "__mus__(program,3).  %* b:-d. *%",
                 "__mus__(answer_set,1).  %* c *%",
-            ],
-        )
-
-    def test_subprogram_simple_d_first(self):
-        self.check_query(
-            program="""
-            a.
-            {c}:-a.
-            d:-c.
-            b:-d.
-            """,
-            query_atom="b",
-            answer_set="a b c d",
-            selectors=[
-                "__mus__(program,3).  %* b:-d. *%",
-                "__mus__(answer_set,1).  %* d *%",
             ],
         )
 
