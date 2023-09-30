@@ -1,9 +1,9 @@
 # import clingo
 # from dumbo_asp.primitives import SymbolicAtom, SymbolicProgram, Model, GroundAtom, Predicate
 
-from ucorexplain import *
 from dumbo_asp.queries import open_graph_in_xasp_navigator
 
+from ucorexplain import *
 
 program = program_from_files(["examples/sudoku/instance4x4.lp","examples/sudoku/encoding4x4.lp"])
 

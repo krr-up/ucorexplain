@@ -4,7 +4,8 @@ Test cases for main application functionality.
 from typing import Optional
 from unittest import TestCase
 
-from dumbo_asp.primitives import SymbolicProgram, GroundAtom
+from dumbo_asp.primitives.programs import SymbolicProgram
+from dumbo_asp.primitives.atoms import GroundAtom
 
 from ucorexplain import (
     answer_set_element_to_string,

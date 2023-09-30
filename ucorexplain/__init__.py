@@ -1,22 +1,16 @@
 """
 UCOREXPLAIN
 """
-
-
 from typing import Final, Optional, Sequence, Union
 
 import clingo
 import typeguard
-from dumbo_asp.primitives import (
-    GroundAtom,
-    Model,
-    SymbolicAtom,
-    SymbolicProgram,
-    SymbolicRule,
-    Predicate
-)
+from dumbo_asp.primitives.atoms import GroundAtom, SymbolicAtom
+from dumbo_asp.primitives.models import Model
+from dumbo_asp.primitives.predicates import Predicate
+from dumbo_asp.primitives.programs import SymbolicProgram
+from dumbo_asp.primitives.rules import SymbolicRule
 from dumbo_utils.console import console
-from rich.progress import Progress
 
 AnswerSetElement = Union[GroundAtom, tuple[GroundAtom, bool]]
 AnswerSet = tuple[AnswerSetElement, ...]
