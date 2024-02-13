@@ -19,13 +19,13 @@ MUS_PREDICATE: Final = f"__mus__"
 
 
 def unpack_answer_set_element(element: AnswerSetElement) -> tuple[GroundAtom, bool]:
-    if type(element) != GroundAtom:
+    if type(element) is not GroundAtom:
         return element
     return element, True
 
 
 def answer_set_element_to_string(element: AnswerSetElement, *, flip: bool = False) -> str:
-    if type(element) == GroundAtom:
+    if type(element) is GroundAtom:
         element = (element, True)
     return f"{'' if element[1] != flip else 'not '}{element[0]}"
 
@@ -38,12 +38,21 @@ def move_up(answer_set: AnswerSet, *pattern: SymbolicAtom) -> AnswerSet:
     return tuple(sorted(answer_set, key=key))
 
 
+def path(file: str) -> str:
+    import pathlib
+    directory = pathlib.Path(__file__).parent.resolve() / ".."
+    return str(directory / file)
+
+
+def file_to_str(file: str) -> str:
+    with open(path(file)) as f:
+        return f.read()
+
+
 def program_from_files(files) -> SymbolicProgram:
-    prg_str = ""
-    for f in files:
-        with open(f) as f:
-            prg_str += "".join(f.readlines())
-    return SymbolicProgram.parse(prg_str)
+    return SymbolicProgram.parse(
+        '\n'.join(file_to_str(file) for file in files)
+    )
 
 
 def answer_set_to_constraints(
@@ -54,7 +63,7 @@ def answer_set_to_constraints(
     """
     Produces the sequence of selecting constraints.
     """
-    if type(query_atom) == GroundAtom:
+    if type(query_atom) is GroundAtom:
         query_atom = (query_atom,)
     query_atoms = set(query_atom)
     query_literals = []
@@ -106,7 +115,7 @@ def build_extended_program_and_possible_selectors(
             + "}."
         ),
         # MALVI: WE STILL NEED SOMETHING FROM to_zero_simplification_version()
-        SymbolicRule.parse(' | '.join(str(atom) for atom in atoms_in_the_answer_set) + f" :- {false_predicate}."),
+        SymbolicRule.parse('{' + '; '.join(str(atom) for atom in atoms_in_the_answer_set) + f"}} :- {false_predicate}."),
         SymbolicRule.parse(f"{{{false_predicate}}}."),
         SymbolicRule.parse(f":- {false_predicate}."),
     )
@@ -187,7 +196,7 @@ def get_selectors(extended_program_, mus_predicate, all_selectors):
     control, selector_to_literal, literal_to_selector = build_control_and_maps(
         extended_program_, mus_predicate
     )
-    selectors = all_selectors
+    selectors = list(all_selectors)  # MALVI: make a defensive copy
     trim_selectors(
         control=control,
         selectors=selectors,
@@ -261,6 +270,7 @@ def get_herbrand_choices(program, known_atoms):
     print_with_title("HERBRAND BASE", herbrand)
     return herbrand
 
+
 def get_herbrand_zero(program, known_atoms, compact=True):
     """
     Adds choices for the known atoms and computes the herbrand base
@@ -274,12 +284,14 @@ def get_herbrand_zero(program, known_atoms, compact=True):
     print_with_title("HERBRAND BASE", herbrand)
     return herbrand
 
+
 def remove_false(extended_program):
     """
     Removes rules using __false__ added in the build_extended_program_and_possible_selectors method
     This is just the last three rules that are added.
     """
-    return SymbolicProgram.of([rule for rule in extended_program][:-3])  # MALVI: DISCARD rules with __false__
+    return SymbolicProgram.of(*([rule for rule in extended_program][:-3]))  # MALVI: DISCARD rules with __false__
+
 
 def get_reified_program(prg):
     reify_program = program_from_files(["ucorexplain/encodings/mario_reify.lp"])
@@ -287,48 +299,71 @@ def get_reified_program(prg):
     reified_program = Model.of_program(full_prg).as_facts
     return reified_program
 
-def get_serialization_program(expanded_prg, query_atom):
-    expanded_prg_facts = Model.of_atoms(expanded_prg.serialize(base64_encode=False)).as_facts
-    expanded_prg_program = SymbolicProgram.parse(expanded_prg_facts)
-    query_program = SymbolicProgram.parse(f'query({clingo.String(str(query_atom))}).')
-    serialization_program = SymbolicProgram.of(*expanded_prg_program, *query_program)
-    print_with_title("SERIALIZATION PROGRAM", serialization_program)
 
-    return serialization_program
+def get_serialization(expanded_prg, query_atom) -> Model:
+    res = Model.of_atoms(
+        *expanded_prg.serialize(base64_encode=False),
+        GroundAtom.parse(f'query({clingo.String(str(query_atom))})')
+    )
+    print_with_title("SERIALIZATION", res.as_facts)
+    return res
 
-def get_derivation_sequence_program(reified_program):
-    derivation_sequence = []
-    ctl = clingo.Control(["1"])
-    ctl.load("ucorexplain/encodings/mario_meta.lp")
-    ctl.add("base",[],reified_program)
+
+def get_derivation_sequence(serialization: Model) -> Model:
+    seen = set()
+    res = []
+    terminate = []
+
+    def collect(model):
+        for at in model.symbols(shown=True):
+            atom = GroundAtom(at)
+            if atom.predicate_name == "assign":  # :- atom(Atom), #count{Value, Reason : assign(Atom, Value, Reason)} > 1.
+                key = (atom.predicate_name, atom.arguments[0])
+            elif atom.predicate_name == "cannot_support":  # :- head(Rule, HeadAtom), #count{Atom : cannot_support(Rule, HeadAtom, Atom)} > 1.
+                key = (atom.predicate_name, atom.arguments[0], atom.arguments[1])
+            elif atom.predicate_name == "constraint":  # :- rule(Rule), #count{Bound : constraint(Rule, Bound)} > 1.
+                key = (atom.predicate_name, atom.arguments[0])
+            elif atom.predicate_name == "terminate":
+                terminate.append(True)
+                continue
+            else:
+                assert False
+            if key not in seen:
+                seen.add(key)
+                res.append(atom)
+
+    while not terminate:
+        previous_len = len(res)
+        ctl = clingo.Control(["1", "--solve-limit=1"])
+        ctl.add("base", [], file_to_str("ucorexplain/encodings/mario_meta.lp"))
+        ctl.add("base", [], serialization.as_facts)
+        ctl.add("base", [], '\n'.join(f"{atom}." for atom in res))
+        ctl.ground([("base", [])])
+        ctl.solve(on_model=collect)
+        assert len(res) > previous_len
+    res = Model.of_elements(*res)
+
+    print_with_title("DERIVATION SEQUENCE", res.filter(when=lambda atom: atom.predicate_name == "assign").as_facts)
+    return res
+
+
+def get_graph(derivation_sequence: Model, serialization: Model) -> Model:
+    ctl = clingo.Control(["1", "--solve-limit=1"])
+    ctl.add("base", [], file_to_str("ucorexplain/encodings/mario_graph.lp"))
+    ctl.add("base", [], serialization.as_facts)
+    ctl.add("base", [], derivation_sequence.as_facts)
     ctl.ground([("base", [])])
-    def m(atoms):
-        for atom in atoms.symbols(shown=True):
-            at = GroundAtom.parse(str(atom))
-            derivation_sequence.append(f"{at.predicate_name}({','.join(str(arg) for arg in at.arguments)},{len(derivation_sequence) + 1})")
-    ctl.solve(on_model=m)
 
-    derivation_sequence_prg = SymbolicProgram.parse(Model.of_atoms(derivation_sequence).as_facts)
-    # WARNING! Here I'm assuming that atoms are ordered according to the derivation in the solver. If it is not, we need a propagator or something different
-    print_with_title("DERIVATION SEQUENCE", derivation_sequence_prg)
-    
-    return derivation_sequence_prg
-
-def get_graph(derivation_sequence_prg, serialization_program):
-    graph_program = program_from_files(["ucorexplain/encodings/mario_graph.lp"])
-    compute_graph_prg = SymbolicProgram.of(*graph_program, *derivation_sequence_prg, *serialization_program)
-
-    graph = Model.of_program(compute_graph_prg)
-    graph = graph.filter(when=lambda atom: atom.predicate_name in ["node", "link'"])
-    graph = graph.rename(Predicate.parse("link'"), Predicate.parse("link"))
-    print_with_title("GRAPH", derivation_sequence_prg)
-
+    graph = Model.of_control(ctl)
+    print_with_title("GRAPH", graph.as_facts)
     return graph
 
+
 def print_with_title(title, value):
+    return
     console.print(f"[bold red]{title}:[/bold red]")
 
-    if type(value) == list:
+    if type(value) is list:
         for e in value:
             console.print(f"{e}")
     else:
@@ -369,7 +404,7 @@ def get_mus_program_and_selectors(
     query_atom: GroundAtom | tuple[GroundAtom, ...],
 ) -> Optional[SymbolicProgram]:
     """
-    Builds MUS program extended with  with externals and the needed selectors
+    Builds MUS program extended with externals and the needed selectors
     """
     atoms_in_answer_set = set(element[0] for element in answer_set)
     

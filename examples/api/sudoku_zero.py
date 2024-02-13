@@ -1,5 +1,4 @@
-# import clingo
-# from dumbo_asp.primitives import SymbolicAtom, SymbolicProgram, Model, GroundAtom, Predicate
+import time
 
 from dumbo_asp.queries import open_graph_in_xasp_navigator
 
@@ -7,15 +6,14 @@ from ucorexplain import *
 
 program = program_from_files(["examples/sudoku/instance4x4.lp","examples/sudoku/encoding4x4.lp"])
 
-atoms_in_answer_set = Model.of_program(program).filter(when=lambda atom: atom.predicate_name == 'assign')
+atoms_in_answer_set = Model.of_program(program)  # .filter(when=lambda atom: atom.predicate_name == 'assign')
 answer_set = tuple([tuple([a,True]) for a in atoms_in_answer_set])
 
-#print(model.as_facts)
-#assert False
+# print(atoms_in_answer_set)
+# assert False
 query_atom = GroundAtom.parse("assign((1,2),2)")
 
 herbrand_base = get_herbrand_zero(program, atoms_in_answer_set)
-
 
 # Add atoms from herbrand to answer set
 answer_set = extend_answer_set(answer_set, herbrand_base)
@@ -29,30 +27,38 @@ extended_program, all_selectors = build_extended_program_and_possible_selectors(
     program, answer_set, query_atom, MUS_PREDICATE
 )
 
+print(time.time())
 selectors = get_selectors(
     extended_program, MUS_PREDICATE, all_selectors
 )
+print(time.time())
 selectors_prg = SymbolicProgram.parse(Model.of_atoms(selectors).as_facts)
+print(time.time())
+# selectors_prg = SymbolicProgram.parse(Model.of_atoms(all_selectors).as_facts)  ## MALVI: REMOVE ME!
 
 # Remove __false__ from rules
 extended_program = remove_false(extended_program)
+print(time.time())
 expanded_prg_with_selectors = SymbolicProgram.of(*extended_program, *selectors_prg)
+print(time.time())
 
 # Ground program manually
-expanded_prg = expanded_prg_with_selectors.expand_global_and_local_variables()
+herbrand_base = Model.of_atoms(*herbrand_base, *all_selectors)  # MALVI: add selectors to HB (otherwise we cannot expand rules)
+print(time.time())
+expanded_prg = expanded_prg_with_selectors.expand_global_and_local_variables(herbrand_base=herbrand_base)
+print(time.time())
 
 # Serialize
-serialization_program  = get_serialization_program(expanded_prg, query_atom)
-
-# Reify
-reified_program = get_reified_program(serialization_program)
+serialization = get_serialization(expanded_prg, query_atom)
+print('ser',time.time())
 
 # Get derivation
-derivation_sequence = get_derivation_sequence_program(reified_program)
-# WARNING! Here I'm assuming that atoms are ordered according to the derivation in the solver. If it is not, we need a propagator or something different
+derivation_sequence = get_derivation_sequence(serialization)
+print(time.time())
 
 # Get graph
-graph = get_graph(derivation_sequence, serialization_program)
+graph = get_graph(derivation_sequence, serialization)
+print(time.time())
 
 # Show graph
 open_graph_in_xasp_navigator(graph)
