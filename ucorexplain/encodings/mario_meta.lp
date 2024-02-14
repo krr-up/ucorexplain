@@ -8,9 +8,6 @@ atom(Atom) :- head(Rule, Atom).
 atom(Atom) :- pos_body(Rule, Atom).
 atom(Atom) :- neg_body(Rule, Atom).
 
-%:- atom(Atom), #count{Value, Reason : assign(Atom, Value, Reason)} > 1.
-terminate :- assign'(Atom, _, _) : query(Atom).
-
 assign'(HeadAtom, true, (support, Rule)) :-
   rule(Rule), head_bounds(Rule, LowerBound, UpperBound);
   head(Rule, HeadAtom), #sum{1, Atom : head(Rule, Atom); -1, Atom : head(Rule, Atom), assign(Atom, false, _)} = LowerBound;
@@ -23,7 +20,6 @@ assign'(HeadAtom, false, (head_upper_bound, Rule)) :-
   assign(BodyAtom, true, _) : pos_body(Rule, BodyAtom);
   assign(BodyAtom, false, _) : neg_body(Rule, BodyAtom).
 
-%:- head(Rule, HeadAtom), #count{Atom : cannot_support(Rule, HeadAtom, Atom)} > 1.
 cannot_support(Rule, HeadAtom, OtherHeadAtom) :-
   rule(Rule), head(Rule, HeadAtom), not choice(Rule,_,_);
   head(Rule, OtherHeadAtom), OtherHeadAtom != HeadAtom, assign(OtherHeadAtom, true, _).
@@ -36,7 +32,7 @@ cannot_support(Rule, HeadAtom, BodyAtom) :-
 
 assign'(Atom, false, (lack_of_support,)) :-
   atom(Atom);
-  cannot_support(Rule, HeadAtom, _) : head(Rule, Atom).
+  cannot_support(Rule, Atom, _) : head(Rule, Atom).
 
 last_support(Rule, Atom) :-
   assign(Atom, true, _), head(Rule, Atom);
@@ -52,7 +48,6 @@ assign'(HeadAtom, false, (last_support, Rule, Atom)) :-
   last_support(Rule, Atom), not choice(Rule, _, _);
   head(Rule, HeadAtom), HeadAtom != Atom.
 
-%:- rule(Rule), #count{Bound : constraint(Rule, Bound)} > 1.
 constraint(Rule, upper_bound) :-
   rule(Rule), head_bounds(Rule, LowerBound, UpperBound);
   #count{Atom : head(Rule, Atom), assign(Atom, true, _)} > UpperBound.
@@ -73,4 +68,4 @@ assign'(Atom, true, (constraint, Rule, Bound)) :-
 #show assign(Atom, Value, Reason) : assign'(Atom, Value, Reason), not assign(Atom, _, _).
 #show cannot_support/3.
 #show constraint/2.
-#show terminate/0.
+#show done : #count{Atom : query(Atom), not assign'(Atom, _, _)} == 0.

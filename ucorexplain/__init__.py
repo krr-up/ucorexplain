@@ -323,7 +323,7 @@ def get_derivation_sequence(serialization: Model) -> Model:
                 key = (atom.predicate_name, atom.arguments[0], atom.arguments[1])
             elif atom.predicate_name == "constraint":  # :- rule(Rule), #count{Bound : constraint(Rule, Bound)} > 1.
                 key = (atom.predicate_name, atom.arguments[0])
-            elif atom.predicate_name == "terminate":
+            elif atom.predicate_name == "done":
                 terminate.append(True)
                 continue
             else:
