@@ -61,4 +61,5 @@ graph = get_graph(derivation_sequence, serialization)
 print(time.time())
 
 # Show graph
-open_graph_in_xasp_navigator(graph)
+open_graph_in_xasp_navigator(graph, with_chopped_body=True, with_backward_search=True,
+                             backward_search_symbols=(';', ' :-'))
