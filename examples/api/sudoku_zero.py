@@ -1,65 +1,44 @@
-import time
-
-from dumbo_asp.queries import open_graph_in_xasp_navigator
+from dumbo_asp.queries import open_graph_in_xasp_navigator, explanation_graph
 
 from ucorexplain import *
 
-program = program_from_files(["examples/sudoku/instance4x4.lp","examples/sudoku/encoding4x4.lp"])
+program = program_from_files(["examples/sudoku/instance4x4.lp", "examples/sudoku/encoding4x4.lp"])
 
-atoms_in_answer_set = Model.of_program(program)  # .filter(when=lambda atom: atom.predicate_name == 'assign')
-answer_set = tuple([tuple([a,True]) for a in atoms_in_answer_set])
+# the answer set contains only the atoms assigned true
+answer_set = Model.of_program(program)
 
-# print(atoms_in_answer_set)
-# assert False
-query_atom = GroundAtom.parse("assign((1,2),2)")
+# the query is a set of atoms (assignment implicit from the answer set)
+query = Model.of_atoms("assign((1,2),2)")
 
-herbrand_base = get_herbrand_zero(program, atoms_in_answer_set)
+# other (false) atoms that the user want to include (if any)
+explicitly_mentioned_atoms = Model.of_atoms()
 
-# Add atoms from herbrand to answer set
-answer_set = extend_answer_set(answer_set, herbrand_base)
+# we expand the HB by disabling fact simplifications
+herbrand_base = program.to_zero_simplification_version(
+    extra_atoms=(*answer_set, *query, *explicitly_mentioned_atoms),
+    compact=True,
+).herbrand_base_without_false_predicate
 
 # LET USERS EXPAND THE VARIABLES THEY LIKE AND REORDER THE PROGRAM AS THEY WISH
 program = program.expand_global_safe_variables(rule=program[-5], variables=["Block"], herbrand_base=herbrand_base)
 program = program.move_up(SymbolicAtom.parse("block(Block, Cell)"))
 
-# Get MUS program
-extended_program, all_selectors = build_extended_program_and_possible_selectors(
-    program, answer_set, query_atom, MUS_PREDICATE
+# possibly move_up also on the herbrand_base
+herbrand_base = SymbolicProgram.parse(herbrand_base.as_facts)  # temporary switch to a program (of facts)
+herbrand_base = herbrand_base.move_up(SymbolicAtom.parse("assign((Row,Col), 2)"))
+herbrand_base = herbrand_base.move_up(SymbolicAtom.parse("assign((1,Col), 2)"))
+herbrand_base = herbrand_base.move_up(SymbolicAtom.parse("assign((Row,2), 2)"))  # this is the second most important
+herbrand_base = herbrand_base.move_up(SymbolicAtom.parse("assign((1,2), 2)"))   # this is the most important
+herbrand_base = tuple(GroundAtom.parse(str(rule.head_atom)) for rule in herbrand_base)  # back to an iterable of GroundAtoms
+
+# compute DAG
+graph = explanation_graph(
+    program=program,
+    answer_set=answer_set,
+    herbrand_base=herbrand_base,
+    query=query,
 )
 
-print(time.time())
-selectors = get_selectors(
-    extended_program, MUS_PREDICATE, all_selectors
-)
-print(time.time())
-selectors_prg = SymbolicProgram.parse(Model.of_atoms(selectors).as_facts)
-print(time.time())
-# selectors_prg = SymbolicProgram.parse(Model.of_atoms(all_selectors).as_facts)  ## MALVI: REMOVE ME!
-
-# Remove __false__ from rules
-extended_program = remove_false(extended_program)
-print(time.time())
-expanded_prg_with_selectors = SymbolicProgram.of(*extended_program, *selectors_prg)
-print(time.time())
-
-# Ground program manually
-herbrand_base = Model.of_atoms(*herbrand_base, *all_selectors)  # MALVI: add selectors to HB (otherwise we cannot expand rules)
-print(time.time())
-expanded_prg = expanded_prg_with_selectors.expand_global_and_local_variables(herbrand_base=herbrand_base)
-print(time.time())
-
-# Serialize
-serialization = get_serialization(expanded_prg, query_atom)
-print('ser',time.time())
-
-# Get derivation
-derivation_sequence = get_derivation_sequence(serialization)
-print(time.time())
-
-# Get graph
-graph = get_graph(derivation_sequence, serialization)
-print(time.time())
-
-# Show graph
+# show DAG
 open_graph_in_xasp_navigator(graph, with_chopped_body=True, with_backward_search=True,
                              backward_search_symbols=(';', ' :-'))

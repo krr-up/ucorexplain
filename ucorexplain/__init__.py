@@ -75,7 +75,7 @@ def answer_set_to_constraints(
             query_atoms.remove(atom)
         else:
             constraints.append(
-                f":- {answer_set_element_to_string(element, flip=True)}, {mus_predicate}(answer_set,{len(constraints)})"
+                f":- {answer_set_element_to_string(element, flip=True)}; {mus_predicate}(answer_set,{len(constraints)})"
                 f"  %* Answer set *% ."
             )
     for atom in query_atoms:
@@ -148,7 +148,7 @@ def build_control_and_maps(
         literal_to_selector[atom.literal] = selector
 
     counter = 0
-    for atom in control.symbolic_atoms.by_signature(mus_predicate, 0):
+    for _ in control.symbolic_atoms.by_signature(mus_predicate, 0):
         assert counter == 0
         counter += 1
 
