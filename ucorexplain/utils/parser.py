@@ -61,7 +61,10 @@ def get_parser() -> ArgumentParser:
         "--prg", "-p", action="append", help="Program files", type=FileType("r")
     )
 
-    parser.add_argument("--answer", "-a", help="Answer set file", default="")
+    parser.add_argument("--answer", "-a", help="Answer set as facts", default="")
+    parser.add_argument(
+        "--false", "-f", help="Atoms that are false as facts", default=""
+    )
 
     parser.add_argument("--query", "-q", help="Query atom", required=True)
 
