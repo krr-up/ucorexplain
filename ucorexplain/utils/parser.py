@@ -67,5 +67,15 @@ def get_parser() -> ArgumentParser:
     )
 
     parser.add_argument("--query", "-q", help="Query atom", required=True)
+    parser.add_argument(
+        "--view", "-w", help="View with clingraph", default=False, action="store_true"
+    )
+    parser.add_argument(
+        "--navegate",
+        "-n",
+        help="Navegate with navegator",
+        default=False,
+        action="store_true",
+    )
 
     return parser

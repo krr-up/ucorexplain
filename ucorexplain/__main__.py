@@ -7,15 +7,17 @@ from dumbo_asp.primitives.models import Model
 from dumbo_asp.primitives.atoms import SymbolicAtom, GroundAtom
 from dumbo_asp.primitives.programs import SymbolicProgram
 
-from ucorexplain import (
-    print_with_title,
-    program_from_files,
-)
+from ucorexplain import print_with_title, program_from_files, visualize, save_graph
 
 # from .meta import run_meta
 from .utils.parser import get_parser
 
 # from dumbo_asp.queries import open_graph_in_xasp_navigator
+import sys
+from io import StringIO  # Python3 use: from io import StringIO
+import sys
+
+old_stdout = sys.stdout
 
 
 def main():
@@ -40,11 +42,14 @@ def main():
     explicitly_mentioned_atoms = Model.of_program(args.false)
     print_with_title("Explicit false", explicitly_mentioned_atoms)
 
-    herbrand_base = program.to_zero_simplification_version(
+    zero_simplification_prg = program.to_zero_simplification_version(
         extra_atoms=(*answer_set, *query, *explicitly_mentioned_atoms),
         compact=True,
-    ).herbrand_base_without_false_predicate
-    print_with_title("Herbrand base", herbrand_base)
+    )
+    print_with_title("Zero_simplification_version", zero_simplification_prg)
+
+    herbrand_base = zero_simplification_prg.herbrand_base_without_false_predicate
+    print_with_title("Herbrand base without zero", herbrand_base)
 
     # Moving stuff would go here
 
@@ -55,15 +60,21 @@ def main():
         herbrand_base=herbrand_base,
         query=query,
     )
+
     print_with_title("Graph", graph)
 
-    # show DAG
-    open_graph_in_xasp_navigator(
-        graph,
-        with_chopped_body=True,
-        with_backward_search=True,
-        backward_search_symbols=(";", " :-"),
-    )
+    if args.view:
+        save_graph(graph)
+        visualize("./graph.lp")
+
+    if args.navegate:
+        # show DAG
+        open_graph_in_xasp_navigator(
+            graph,
+            with_chopped_body=True,
+            with_backward_search=True,
+            backward_search_symbols=(";", " :-"),
+        )
 
 
 if __name__ == "__main__":
