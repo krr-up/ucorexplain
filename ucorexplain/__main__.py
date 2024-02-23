@@ -54,12 +54,15 @@ def main():
     # Moving stuff would go here
 
     # compute DAG
+    pus_program = []
     graph = explanation_graph(
         program=program,
         answer_set=answer_set,
         herbrand_base=herbrand_base,
         query=query,
+        collect_pus_program=pus_program,
     )
+    print_with_title("Grounded Program with selectors", pus_program)
 
     print_with_title("Graph", graph)
 
