@@ -44,8 +44,10 @@ def program_from_files(files) -> SymbolicProgram:
     return SymbolicProgram.parse("\n".join(file_to_str(file) for file in files))
 
 
-def print_with_title(title, value):
+def print_with_title(title, value, quiet=False):
     # return
+    if quiet:
+        return
     console.print(f"[bold red]{title}:[/bold red]")
 
     if type(value) is list:
@@ -60,7 +62,7 @@ ENCODINGS_PATH = os.path.join(".", os.path.join("ucorexplain", "encodings"))
 
 
 def visualize(file_path) -> None:
-    fb = Factbase()
+    fb = Factbase(prefix="viz_")
     ctl = Control([])
     ctx = ClingraphContext()
     add_elements_ids(ctl)
@@ -70,9 +72,16 @@ def visualize(file_path) -> None:
 
     ctl.ground([("base", [])], context=ctx)
     ctl.solve(on_model=fb.add_model)
-    graphs = compute_graphs(fb)
+    graphs = compute_graphs(fb, graphviz_type="digraph")
+    path_png = render(graphs, format="png")
+    print("PNG Image saved in: " + path_png["default"])
     paths = render(graphs, view=True, format="svg")
     add_svg_interaction([paths])
+    print(
+        "SVG Image saved in: "
+        + paths["default"]
+        + "      Click on the nodes to expand!"
+    )
 
 
 def ruleto64(rule_str):
@@ -88,7 +97,7 @@ def ruleto64(rule_str):
 def save_graph(graph):
     with open("graph.lp", "wb") as file_to_save:
         for a in graph:
-            file_to_save.write(("input_" + a.predicate_name).encode())
+            file_to_save.write((a.predicate_name).encode())
             file_to_save.write(
                 "({}".format(
                     ",".join([str(a).strip('"') for a in a.arguments[:-1]])

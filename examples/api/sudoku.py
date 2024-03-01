@@ -1,43 +1,63 @@
-from dumbo_asp.primitives import SymbolicAtom, SymbolicProgram, Model, GroundAtom
+from dumbo_asp.queries import open_graph_in_xasp_navigator, explanation_graph
+from dumbo_asp.primitives.models import Model
+from dumbo_asp.primitives.atoms import SymbolicAtom, GroundAtom
+from dumbo_asp.primitives.programs import SymbolicProgram
 
-from ucorexplain import get_mus_program_and_selectors , print_output, move_up, program_from_files, print_selectors
-from ucorexplain.meta import run_meta
+from ucorexplain import program_from_files
 
-program = program_from_files(["examples/sudoku/instance1.lp","examples/sudoku/encoding.lp"])
-program = program.expand_global_safe_variables(rule=program[-3], variables=["Row"])
-program = program.expand_global_safe_variables(rule=program[-2], variables=["Col"])
-program = program.expand_global_safe_variables(rule=program[-1], variables=["Row'", "Col'"])
-
-query_row = 7
-query_col = 9
-query_val = 3
-
-program = program.move_up(*program.query_herbrand_base(
-    "(Row, Col), Value",
-    f"given((Row, Col), Value), block((sub, Row', Col'), (Row, Col)), "
-    f"block((sub, Row', Col'), ({query_row}, {query_col}))"
-))
-program = program.move_up(SymbolicAtom.parse(f"given((Row, {query_col}), Value)"))
-program = program.move_up(SymbolicAtom.parse(f"given(({query_row}, Col), Value)"))
-
-answer_set = tuple(Model.of_program(
-    #"block((row,1),(1,1)). block((row,1),(1,2)). block((row,1),(1,3)). block((row,1),(1,4)). block((row,1),(1,5)). block((row,1),(1,6)). block((row,1),(1,7)). block((row,1),(1,8)). block((row,1),(1,9)). block((row,2),(2,1)). block((row,2),(2,2)). block((row,2),(2,3)). block((row,2),(2,4)). block((row,2),(2,5)). block((row,2),(2,6)). block((row,2),(2,7)). block((row,2),(2,8)). block((row,2),(2,9)). block((row,3),(3,1)). block((row,3),(3,2)). block((row,3),(3,3)). block((row,3),(3,4)). block((row,3),(3,5)). block((row,3),(3,6)). block((row,3),(3,7)). block((row,3),(3,8)). block((row,3),(3,9)). block((row,4),(4,1)). block((row,4),(4,2)). block((row,4),(4,3)). block((row,4),(4,4)). block((row,4),(4,5)). block((row,4),(4,6)). block((row,4),(4,7)). block((row,4),(4,8)). block((row,4),(4,9)). block((row,5),(5,1)). block((row,5),(5,2)). block((row,5),(5,3)). block((row,5),(5,4)). block((row,5),(5,5)). block((row,5),(5,6)). block((row,5),(5,7)). block((row,5),(5,8)). block((row,5),(5,9)). block((row,6),(6,1)). block((row,6),(6,2)). block((row,6),(6,3)). block((row,6),(6,4)). block((row,6),(6,5)). block((row,6),(6,6)). block((row,6),(6,7)). block((row,6),(6,8)). block((row,6),(6,9)). block((row,7),(7,1)). block((row,7),(7,2)). block((row,7),(7,3)). block((row,7),(7,4)). block((row,7),(7,5)). block((row,7),(7,6)). block((row,7),(7,7)). block((row,7),(7,8)). block((row,7),(7,9)). block((row,8),(8,1)). block((row,8),(8,2)). block((row,8),(8,3)). block((row,8),(8,4)). block((row,8),(8,5)). block((row,8),(8,6)). block((row,8),(8,7)). block((row,8),(8,8)). block((row,8),(8,9)). block((row,9),(9,1)). block((row,9),(9,2)). block((row,9),(9,3)). block((row,9),(9,4)). block((row,9),(9,5)). block((row,9),(9,6)). block((row,9),(9,7)). block((row,9),(9,8)). block((row,9),(9,9)). block((col,1),(1,1)). block((col,2),(1,2)). block((col,3),(1,3)). block((col,4),(1,4)). block((col,5),(1,5)). block((col,6),(1,6)). block((col,7),(1,7)). block((col,8),(1,8)). block((col,9),(1,9)). block((col,1),(2,1)). block((col,2),(2,2)). block((col,3),(2,3)). block((col,4),(2,4)). block((col,5),(2,5)). block((col,6),(2,6)). block((col,7),(2,7)). block((col,8),(2,8)). block((col,9),(2,9)). block((col,1),(3,1)). block((col,2),(3,2)). block((col,3),(3,3)). block((col,4),(3,4)). block((col,5),(3,5)). block((col,6),(3,6)). block((col,7),(3,7)). block((col,8),(3,8)). block((col,9),(3,9)). block((col,1),(4,1)). block((col,2),(4,2)). block((col,3),(4,3)). block((col,4),(4,4)). block((col,5),(4,5)). block((col,6),(4,6)). block((col,7),(4,7)). block((col,8),(4,8)). block((col,9),(4,9)). block((col,1),(5,1)). block((col,2),(5,2)). block((col,3),(5,3)). block((col,4),(5,4)). block((col,5),(5,5)). block((col,6),(5,6)). block((col,7),(5,7)). block((col,8),(5,8)). block((col,9),(5,9)). block((col,1),(6,1)). block((col,2),(6,2)). block((col,3),(6,3)). block((col,4),(6,4)). block((col,5),(6,5)). block((col,6),(6,6)). block((col,7),(6,7)). block((col,8),(6,8)). block((col,9),(6,9)). block((col,1),(7,1)). block((col,2),(7,2)). block((col,3),(7,3)). block((col,4),(7,4)). block((col,5),(7,5)). block((col,6),(7,6)). block((col,7),(7,7)). block((col,8),(7,8)). block((col,9),(7,9)). block((col,1),(8,1)). block((col,2),(8,2)). block((col,3),(8,3)). block((col,4),(8,4)). block((col,5),(8,5)). block((col,6),(8,6)). block((col,7),(8,7)). block((col,8),(8,8)). block((col,9),(8,9)). block((col,1),(9,1)). block((col,2),(9,2)). block((col,3),(9,3)). block((col,4),(9,4)). block((col,5),(9,5)). block((col,6),(9,6)). block((col,7),(9,7)). block((col,8),(9,8)). block((col,9),(9,9)). block((sub,0,0),(1,1)). block((sub,0,0),(1,2)). block((sub,0,0),(1,3)). block((sub,0,1),(1,4)). block((sub,0,1),(1,5)). block((sub,0,1),(1,6)). block((sub,0,2),(1,7)). block((sub,0,2),(1,8)). block((sub,0,2),(1,9)). block((sub,0,0),(2,1)). block((sub,0,0),(2,2)). block((sub,0,0),(2,3)). block((sub,0,1),(2,4)). block((sub,0,1),(2,5)). block((sub,0,1),(2,6)). block((sub,0,2),(2,7)). block((sub,0,2),(2,8)). block((sub,0,2),(2,9)). block((sub,0,0),(3,1)). block((sub,0,0),(3,2)). block((sub,0,0),(3,3)). block((sub,0,1),(3,4)). block((sub,0,1),(3,5)). block((sub,0,1),(3,6)). block((sub,0,2),(3,7)). block((sub,0,2),(3,8)). block((sub,0,2),(3,9)). block((sub,1,0),(4,1)). block((sub,1,0),(4,2)). block((sub,1,0),(4,3)). block((sub,1,1),(4,4)). block((sub,1,1),(4,5)). block((sub,1,1),(4,6)). block((sub,1,2),(4,7)). block((sub,1,2),(4,8)). block((sub,1,2),(4,9)). block((sub,1,0),(5,1)). block((sub,1,0),(5,2)). block((sub,1,0),(5,3)). block((sub,1,1),(5,4)). block((sub,1,1),(5,5)). block((sub,1,1),(5,6)). block((sub,1,2),(5,7)). block((sub,1,2),(5,8)). block((sub,1,2),(5,9)). block((sub,1,0),(6,1)). block((sub,1,0),(6,2)). block((sub,1,0),(6,3)). block((sub,1,1),(6,4)). block((sub,1,1),(6,5)). block((sub,1,1),(6,6)). block((sub,1,2),(6,7)). block((sub,1,2),(6,8)). block((sub,1,2),(6,9)). block((sub,2,0),(7,1)). block((sub,2,0),(7,2)). block((sub,2,0),(7,3)). block((sub,2,1),(7,4)). block((sub,2,1),(7,5)). block((sub,2,1),(7,6)). block((sub,2,2),(7,7)). block((sub,2,2),(7,8)). block((sub,2,2),(7,9)). block((sub,2,0),(8,1)). block((sub,2,0),(8,2)). block((sub,2,0),(8,3)). block((sub,2,1),(8,4)). block((sub,2,1),(8,5)). block((sub,2,1),(8,6)). block((sub,2,2),(8,7)). block((sub,2,2),(8,8)). block((sub,2,2),(8,9)). block((sub,2,0),(9,1)). block((sub,2,0),(9,2)). block((sub,2,0),(9,3)). block((sub,2,1),(9,4)). block((sub,2,1),(9,5)). block((sub,2,1),(9,6)). block((sub,2,2),(9,7)). block((sub,2,2),(9,8)). block((sub,2,2),(9,9)). given((1,1),6). given((1,3),9). given((1,4),8). given((1,6),7). given((2,4),6). given((2,9),1). given((3,2),3). given((3,3),5). given((3,6),2). given((3,8),7). given((4,2),6). given((4,3),8). given((4,7),1). given((4,9),2). given((5,1),3). given((5,6),5). given((6,4),2). given((6,7),3). given((6,8),6). given((7,1),8). given((7,2),5). given((7,3),4). given((7,4),7). given((7,5),2). given((7,7),6). given((7,8),9). given((8,4),5). given((8,5),9). given((8,9),8). given((9,1),2). given((9,3),6). given((9,4),4). given((9,5),3). given((9,7),7). given((9,8),1). given((9,9),5). "
-    "assign((1,1),6). assign((1,3),9). assign((1,4),8). assign((1,6),7). assign((2,4),6). assign((2,9),1). assign((3,2),3). assign((3,3),5). assign((3,6),2). assign((3,8),7). assign((4,2),6). assign((4,3),8). assign((4,7),1). assign((4,9),2). assign((5,1),3). assign((5,6),5). assign((6,4),2). assign((6,7),3). assign((6,8),6). assign((7,1),8). assign((7,2),5). assign((7,3),4). assign((7,4),7). assign((7,5),2). assign((7,7),6). assign((7,8),9). assign((8,4),5). assign((8,5),9). assign((8,9),8). assign((9,1),2). assign((9,3),6). assign((9,4),4). assign((9,5),3). assign((9,7),7). assign((9,8),1). assign((9,9),5). assign((1,5),1). assign((1,2),2). assign((1,8),3). assign((1,9),4). assign((1,7),5). assign((2,8),2). assign((2,6),3). assign((2,1),4). assign((2,5),5). assign((2,3),7). assign((2,2),8). assign((2,7),9). assign((3,1),1). assign((3,5),4). assign((3,9),6). assign((3,7),8). assign((3,4),9). assign((4,4),3). assign((4,6),4). assign((4,8),5). assign((4,5),7). assign((4,1),9). assign((5,4),1). assign((5,3),2). assign((5,7),4). assign((5,5),6). assign((5,2),7). assign((5,8),8). assign((5,9),9). assign((6,3),1). assign((6,2),4). assign((6,1),5). assign((6,9),7). assign((6,5),8). assign((6,6),9). assign((7,6),1). assign((7,9),3). assign((8,2),1). assign((8,7),2). assign((8,3),3). assign((8,8),4). assign((8,6),6). assign((8,1),7). assign((9,6),8). assign((9,2),9)."
-))
-answer_set = move_up(answer_set, *program.query_herbrand_base(
-    "(Row, Col), Value",
-    f"assign((Row, Col), Value), block((sub, Row', Col'), (Row, Col)), "
-    f"block((sub, Row', Col'), ({query_row}, {query_col}))"
-))
-answer_set = move_up(answer_set, SymbolicAtom.parse(f"assign((Row, {query_col}), Value)"))
-answer_set = move_up(answer_set, SymbolicAtom.parse(f"assign(({query_row}, Col), Value)"))
-
-query_atom = GroundAtom.parse(f"assign(({query_row},{query_col}),{query_val})")
-mus_program, selectors = get_mus_program_and_selectors(
-    program=program,
-    answer_set=tuple((a,True) for a in answer_set),
-    query_atom=query_atom,
+program = program_from_files(
+    ["examples/sudoku/instance4x4.lp", "examples/sudoku/encoding4x4.lp"]
 )
 
-explanation = run_meta(mus_program,selectors, i=10)
+# the answer set contains only the atoms assigned true
+answer_set = Model.of_program(program)
 
+# the query is a set of atoms (assignment implicit from the answer set)
+query = Model.of_atoms("assign((1,2),2)")
+
+# other (false) atoms that the user want to include (if any)
+explicitly_mentioned_atoms = Model.of_atoms()
+
+# we expand the HB by disabling fact simplifications
+herbrand_base = program.to_zero_simplification_version(
+    extra_atoms=(*answer_set, *query, *explicitly_mentioned_atoms),
+    compact=True,
+).herbrand_base_without_false_predicate
+
+# LET USERS EXPAND THE VARIABLES THEY LIKE AND REORDER THE PROGRAM AS THEY WISH
+program = program.expand_global_safe_variables(
+    rule=program[-5], variables=["Block"], herbrand_base=herbrand_base
+)
+program = program.move_up(SymbolicAtom.parse("block(Block, Cell)"))
+
+# possibly move_up also on the herbrand_base
+herbrand_base = SymbolicProgram.parse(
+    herbrand_base.as_facts
+)  # temporary switch to a program (of facts)
+herbrand_base = herbrand_base.move_up(SymbolicAtom.parse("assign((Row,Col), 2)"))
+herbrand_base = herbrand_base.move_up(SymbolicAtom.parse("assign((1,Col), 2)"))
+herbrand_base = herbrand_base.move_up(
+    SymbolicAtom.parse("assign((Row,2), 2)")
+)  # this is the second most important
+herbrand_base = herbrand_base.move_up(
+    SymbolicAtom.parse("assign((1,2), 2)")
+)  # this is the most important
+herbrand_base = tuple(
+    GroundAtom.parse(str(rule.head_atom)) for rule in herbrand_base
+)  # back to an iterable of GroundAtoms
+
+# compute DAG
+graph = explanation_graph(
+    program=program,
+    answer_set=answer_set,
+    herbrand_base=herbrand_base,
+    query=query,
+)
+
+# show DAG
+open_graph_in_xasp_navigator(
+    graph,
+    with_chopped_body=True,
+    with_backward_search=True,
+    backward_search_symbols=(";", " :-"),
+)
