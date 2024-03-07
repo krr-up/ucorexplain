@@ -1,4 +1,4 @@
-from dumbo_asp.queries import open_graph_in_xasp_navigator, explanation_graph
+from dumbo_asp.queries import pack_xasp_navigator_url, explanation_graph
 from dumbo_asp.primitives.models import Model
 from dumbo_asp.primitives.atoms import SymbolicAtom, GroundAtom
 from dumbo_asp.primitives.programs import SymbolicProgram
@@ -57,8 +57,9 @@ graph = explanation_graph(
 # save_graph(graph)
 # visualize("./graph.lp")
 
-open_graph_in_xasp_navigator(
+pack_xasp_navigator_url(
     graph,
+    open_in_browser=True,
     with_chopped_body=True,
     with_backward_search=True,
     backward_search_symbols=(";", " :-"),

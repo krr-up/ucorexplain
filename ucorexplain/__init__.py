@@ -95,14 +95,16 @@ def ruleto64(rule_str):
 def save_graph(graph):
     with open("graph.lp", "wb") as file_to_save:
         for a in graph:
-            file_to_save.write((a.predicate_name).encode())
-            file_to_save.write(
-                "({}".format(
-                    ",".join([str(a).strip('"') for a in a.arguments[:-1]])
-                ).encode()
-            )
 
             if a.predicate_name == "node":
+                if str(a.arguments[0]).strip('"') == "None":
+                    continue
+                file_to_save.write((a.predicate_name).encode())
+                file_to_save.write(
+                    "({}".format(
+                        ",".join([str(a).strip('"') for a in a.arguments[:-1]])
+                    ).encode()
+                )
                 t = a.arguments[-1].arguments
                 file_to_save.write(", (".encode())
                 file_to_save.write(str(t[0]).encode())
@@ -116,6 +118,14 @@ def save_graph(graph):
                         file_to_save.write(str(t[2]).encode())
                 file_to_save.write(")".encode())
             if a.predicate_name == "link":
+                if str(a.arguments[1]).strip('"') == "None":
+                    continue
+                file_to_save.write((a.predicate_name).encode())
+                file_to_save.write(
+                    "({}".format(
+                        ",".join([str(a).strip('"') for a in a.arguments[:-1]])
+                    ).encode()
+                )
                 s = ruleto64(str(a.arguments[-1]))
                 file_to_save.write(', "'.encode())
                 file_to_save.write(s)

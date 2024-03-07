@@ -78,9 +78,9 @@ def get_parser() -> ArgumentParser:
         "--view", "-w", help="View with clingraph", default=False, action="store_true"
     )
     parser.add_argument(
-        "--navegate",
+        "--navigate",
         "-n",
-        help="Navegate with navegator",
+        help="navigate the explanation with navigator",
         default=False,
         action="store_true",
     )
