@@ -80,7 +80,7 @@ def visualize(file_path) -> None:
     print(
         "SVG Image saved in: "
         + paths["default"]
-        + "      Click on the nodes to expand!"
+        + "      Click on the nodes to expand! If your browser is opening empty, you might have to scroll to the side to find the first node"
     )
 
 

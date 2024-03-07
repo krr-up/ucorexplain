@@ -3,7 +3,7 @@ from dumbo_asp.primitives.models import Model
 from dumbo_asp.primitives.atoms import SymbolicAtom, GroundAtom
 from dumbo_asp.primitives.programs import SymbolicProgram
 
-from ucorexplain import program_from_files
+from ucorexplain import program_from_files, visualize, save_graph
 
 program = program_from_files(
     ["examples/sudoku/instance4x4.lp", "examples/sudoku/encoding4x4.lp"]
@@ -28,18 +28,18 @@ herbrand_base = program.to_zero_simplification_version(
 program = program.expand_global_safe_variables(
     rule=program[-5], variables=["Block"], herbrand_base=herbrand_base
 )
-program = program.move_up(SymbolicAtom.parse("block(Block, Cell)"))
+program = program.move_before(SymbolicAtom.parse("block(Block, Cell)"))
 
-# possibly move_up also on the herbrand_base
+# possibly move_before also on the herbrand_base
 herbrand_base = SymbolicProgram.parse(
     herbrand_base.as_facts
 )  # temporary switch to a program (of facts)
-herbrand_base = herbrand_base.move_up(SymbolicAtom.parse("assign((Row,Col), 2)"))
-herbrand_base = herbrand_base.move_up(SymbolicAtom.parse("assign((1,Col), 2)"))
-herbrand_base = herbrand_base.move_up(
+herbrand_base = herbrand_base.move_before(SymbolicAtom.parse("assign((Row,Col), 2)"))
+herbrand_base = herbrand_base.move_before(SymbolicAtom.parse("assign((1,Col), 2)"))
+herbrand_base = herbrand_base.move_before(
     SymbolicAtom.parse("assign((Row,2), 2)")
 )  # this is the second most important
-herbrand_base = herbrand_base.move_up(
+herbrand_base = herbrand_base.move_before(
     SymbolicAtom.parse("assign((1,2), 2)")
 )  # this is the most important
 herbrand_base = tuple(
@@ -54,7 +54,9 @@ graph = explanation_graph(
     query=query,
 )
 
-# show DAG
+# save_graph(graph)
+# visualize("./graph.lp")
+
 open_graph_in_xasp_navigator(
     graph,
     with_chopped_body=True,
