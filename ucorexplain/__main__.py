@@ -4,6 +4,7 @@ The main entry point for the application.
 
 import sys
 
+from dumbo_asp.primitives.programs import SymbolicProgram
 from dumbo_asp.primitives.models import Model
 from dumbo_asp.queries import explanation_graph, pack_xasp_navigator_url
 
@@ -34,14 +35,14 @@ def main():
     explicitly_mentioned_atoms = Model.of_program(args.false)
     print_with_title("Explicit false", explicitly_mentioned_atoms, quiet)
 
-    zero_simplification_prg = program.to_zero_simplification_version(
-        extra_atoms=(*answer_set, *query, *explicitly_mentioned_atoms),
-        compact=True,
-    )
-    print_with_title("Zero_simplification_version", zero_simplification_prg, quiet)
+    herbrand_base = SymbolicProgram.of(
+        *program,
+        *SymbolicProgram.parse(answer_set.as_facts),
+        *SymbolicProgram.parse(query.as_facts),
+        *SymbolicProgram.parse(explicitly_mentioned_atoms.as_facts),
+    ).herbrand_base
 
-    herbrand_base = zero_simplification_prg.herbrand_base_without_false_predicate
-    print_with_title("Herbrand base without zero", herbrand_base, quiet)
+    print_with_title("Herbrand base", herbrand_base, quiet)
 
     # Moving stuff would go here
 
@@ -61,6 +62,10 @@ def main():
     if args.view:
         save_graph(graph)
         visualize("./graph.lp")
+
+    if args.view_tree:
+        save_graph(graph)
+        visualize("./graph.lp", tree=True)
 
     if args.navigate:
         # show DAG

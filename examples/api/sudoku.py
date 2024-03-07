@@ -19,10 +19,12 @@ query = Model.of_atoms("assign((1,2),2)")
 explicitly_mentioned_atoms = Model.of_atoms()
 
 # we expand the HB by disabling fact simplifications
-herbrand_base = program.to_zero_simplification_version(
-    extra_atoms=(*answer_set, *query, *explicitly_mentioned_atoms),
-    compact=True,
-).herbrand_base_without_false_predicate
+herbrand_base = SymbolicProgram.of(
+    *program,
+    *SymbolicProgram.parse(answer_set.as_facts),
+    *SymbolicProgram.parse(query.as_facts),
+    *SymbolicProgram.parse(explicitly_mentioned_atoms.as_facts),
+).herbrand_base
 
 # LET USERS EXPAND THE VARIABLES THEY LIKE AND REORDER THE PROGRAM AS THEY WISH
 program = program.expand_global_safe_variables(

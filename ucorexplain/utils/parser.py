@@ -78,6 +78,12 @@ def get_parser() -> ArgumentParser:
         "--view", "-w", help="View with clingraph", default=False, action="store_true"
     )
     parser.add_argument(
+        "--view-tree",
+        help="View with clingraph as a tree with repeated nodes",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
         "--navigate",
         "-n",
         help="navigate the explanation with navigator",

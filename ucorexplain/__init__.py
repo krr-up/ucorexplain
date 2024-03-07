@@ -59,13 +59,16 @@ def print_with_title(title, value, quiet=False):
 ENCODINGS_PATH = os.path.join(".", os.path.join("ucorexplain", "encodings"))
 
 
-def visualize(file_path) -> None:
+def visualize(file_path, tree=False) -> None:
     fb = Factbase(prefix="viz_")
     ctl = Control(["--warn=none"])
     ctx = ClingraphContext()
     add_elements_ids(ctl)
     ctl.load(file_path)
-    ctl.load(os.path.join(ENCODINGS_PATH, "clingraph.lp"))
+    if tree:
+        ctl.load(os.path.join(ENCODINGS_PATH, "clingraph_tree.lp"))
+    else:
+        ctl.load(os.path.join(ENCODINGS_PATH, "clingraph_simple.lp"))
     enable_python()
 
     ctl.ground([("base", [])], context=ctx)
@@ -80,6 +83,7 @@ def visualize(file_path) -> None:
         + paths["default"]
         + "      Click on the nodes to expand! If your browser is opening empty, you might have to scroll to the side to find the first node"
     )
+    return fb
 
 
 def ruleto64(rule_str):

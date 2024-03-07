@@ -21,30 +21,58 @@ ucorexplain -h
   - No aggregates
   - No show statements
 
-### Run paper example
+### Run paper example 5
 
 The user can first run `clingo` to get a result for the program with
 
 ```shell
-clingo examples/basic/paper.lp
+clingo examples/paper/example5.lp
 ```
 
 ```
 pyclingo version 5.7.1
-Reading from examples/basic/paper.lp
+Reading from examples/paper/example5.lp
 Solving...
 Answer: 1
 q(a,b) q(b,a) p(a) r(a)
 SATISFIABLE
 ```
 
-Then you might want to know why `r(b)` is not part of the answer.
+Then you might want to know why `p(a)` is part of the answer.
 
 ```
-ucorexplain --prg examples/basic/paper.lp -q "r(b)" -a "q(a,b). q(b,a). p(a). r(a)." --view
+ucorexplain --prg examples/paper/example5.lp -q "p(a)" -a "q(a,b). q(b,a). p(a). r(a)." --view
 ```
 
-![](./img/paper.png)
+![](./img/paper5.png)
+
+
+### Run paper example 8
+
+The user can first run `clingo` to get a result for the program with
+
+```shell
+clingo examples/paper/example8.lp
+```
+
+```
+pyclingo version 5.7.1
+Reading from examples/paper/example8.lp
+Solving...
+Answer: 1
+
+SATISFIABLE
+```
+
+Then you might want to know why `r` is not part of this empty answer set.
+
+```
+ucorexplain --prg examples/paper/example8.lp -q "r" -a "" -f "p." --view --verbose
+```
+
+This will output a graph with the single constraint needed, as well as all intermediate steps (because of `--verbose`).
+This steps will show that the single needed rule is the one marked with objective atom `__pus__(program,2).`
+We encourage you to read the paper to understand this output better. 
 
 
 ### Run Sudoku example
@@ -59,9 +87,12 @@ ucorexplain --prg examples/sudoku/encoding.lp --prg examples/sudoku/instance4x4.
 
 ![](./img/sudoku.png)
 
+This graph can also be shown as a tree with repeated nodes by changing `--view` for  `--view-tree` 
+
+
 #### As an API
 
-This option allows to reorder the rules and expand them
+This option allows to reorder the rules and expand them. It opens the navigator
 
 ```shell
 python examples/api/sudoku.py
