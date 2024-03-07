@@ -61,7 +61,7 @@ ENCODINGS_PATH = os.path.join(".", os.path.join("ucorexplain", "encodings"))
 
 def visualize(file_path) -> None:
     fb = Factbase(prefix="viz_")
-    ctl = Control([])
+    ctl = Control(["--warn=none"])
     ctx = ClingraphContext()
     add_elements_ids(ctl)
     ctl.load(file_path)
