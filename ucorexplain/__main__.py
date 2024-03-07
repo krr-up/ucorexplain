@@ -2,20 +2,13 @@
 The main entry point for the application.
 """
 
-from dumbo_asp.queries import open_graph_in_xasp_navigator, explanation_graph
+import sys
+
 from dumbo_asp.primitives.models import Model
-from dumbo_asp.primitives.atoms import SymbolicAtom, GroundAtom
-from dumbo_asp.primitives.programs import SymbolicProgram
+from dumbo_asp.queries import explanation_graph, pack_xasp_navigator_url
 
 from ucorexplain import print_with_title, program_from_files, visualize, save_graph
-
-# from .meta import run_meta
 from .utils.parser import get_parser
-
-# from dumbo_asp.queries import open_graph_in_xasp_navigator
-import sys
-from io import StringIO  # Python3 use: from io import StringIO
-import sys
 
 old_stdout = sys.stdout
 
@@ -69,17 +62,18 @@ def main():
         save_graph(graph)
         visualize("./graph.lp")
 
-    if args.navegate:
+    if args.navigate:
         # show DAG
-        open_graph_in_xasp_navigator(
+        pack_xasp_navigator_url(
             graph,
+            open_in_browser=True,
             with_chopped_body=True,
             with_backward_search=True,
             backward_search_symbols=(";", " :-"),
         )
 
-    if quiet and not args.view and not args.navegate:
-        print("Use --view or --navegate to see the graph")
+    if quiet and not args.view and not args.navigate:
+        print("Use --view or --navigate to see the graph")
 
 
 if __name__ == "__main__":

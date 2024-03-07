@@ -25,8 +25,6 @@ from clingraph.clingo_utils import add_svg_interaction, add_elements_ids
 AnswerSetElement = Union[GroundAtom, tuple[GroundAtom, bool]]
 AnswerSet = tuple[AnswerSetElement, ...]
 
-MUS_PREDICATE: Final = f"__mus__"
-
 
 def path(file: str) -> str:
     import pathlib
