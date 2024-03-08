@@ -73,9 +73,16 @@ def get_parser() -> ArgumentParser:
         "--false", "-f", help="Atoms that are false as facts", default=""
     )
 
-    parser.add_argument("--query", "-q", help="Query atom", required=True)
+    parser.add_argument("--query", "-q", help="Query atom as facts", required=True)
     parser.add_argument(
         "--view", "-w", help="View with clingraph", default=False, action="store_true"
+    )
+
+    parser.add_argument(
+        "--move-before",
+        "-m",
+        help="Moves the given atom (with possible) variables before in the herbrand base giving it preference.",
+        action="append",
     )
     parser.add_argument(
         "--view-tree",

@@ -27,14 +27,15 @@ node_reason(X,"Avoid satisfing constraint"):-node(X,_,(constraint,_,_)).
 #const red = "#F6B0B0".
 #const green = "#BFFEBF".
 #const fact = "#609E60".
-
+#const assumption_color = "#AAFDD8".
 
 viz_node(X):-node(X,_,_).
 viz_attr(node,X, style, filled):-node(X,_,_).
 viz_attr(node,X, shape, plain):-node(X,_,_).
 viz_attr(node, X, fillcolor, red):-node(X,false,_).
-viz_attr(node, X, fillcolor, green):-node(X,true,_).
-viz_attr(node, X, fillcolor, fact):-node(X,true,_), fact(X).
+viz_attr(node, X, fillcolor, green):-node(X,true,_), not fact(X), not node(X,_,(assumption)).
+viz_attr(node, X, fillcolor, fact):-node(X,true,_), fact(X), not node(X,_,(assumption)).
+viz_attr(node, X, fillcolor, assumption_color):-node(X,true,_), node(X,_,(assumption)).
 viz_attr(node, X, label, @concat(
     "<<TABLE cellborder='1' cellspacing='0'>",
     "<TR><TD><b>{{name}}</b></TD></TR>",

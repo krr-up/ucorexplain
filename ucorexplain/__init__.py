@@ -42,6 +42,11 @@ def program_from_files(files) -> SymbolicProgram:
     return SymbolicProgram.parse("\n".join(file_to_str(file) for file in files))
 
 
+def print_error(error):
+    # return
+    console.print(f"[bold red]{error}:[/bold red]")
+
+
 def print_with_title(title, value, quiet=False):
     # return
     if quiet:
