@@ -59,7 +59,7 @@ def print_with_title(title, value, quiet=False):
 ENCODINGS_PATH = os.path.join(".", os.path.join("ucorexplain", "encodings"))
 
 
-def visualize(file_path, tree=False) -> Factbase:
+def visualize(file_path, tree: bool = False, create_image: bool = True) -> Factbase:
     fb = Factbase(prefix="viz_")
     ctl = Control(["--warn=none"])
     ctx = ClingraphContext()
@@ -74,15 +74,17 @@ def visualize(file_path, tree=False) -> Factbase:
     ctl.ground([("base", [])], context=ctx)
     ctl.solve(on_model=fb.add_model)
     graphs = compute_graphs(fb, graphviz_type="digraph")
-    path_png = render(graphs, format="png")
-    print("PNG Image saved in: " + path_png["default"])
-    paths = render(graphs, view=True, format="svg")
-    add_svg_interaction([paths])
-    print(
-        "SVG Image saved in: "
-        + paths["default"]
-        + "      Click on the nodes to expand! If your browser is opening empty, you might have to scroll to the side to find the first node"
-    )
+    if create_image:
+        path_png = render(graphs, format="png")
+        print("PNG Image saved in: " + path_png["default"])
+        paths = render(graphs, view=True, format="svg")
+        add_svg_interaction([paths])
+        print(
+            "SVG Image saved in: "
+            + paths["default"]
+            + "      Click on the nodes to expand! If your browser is opening empty, you might have to scroll to the "
+              "side to find the first node"
+        )
     return fb
 
 
