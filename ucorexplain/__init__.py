@@ -17,6 +17,8 @@ from clingraph.graphviz import compute_graphs, render  # type: ignore
 from clingraph.orm import Factbase  # type: ignore
 from clingraph.clingo_utils import add_svg_interaction, add_elements_ids
 
+from .utils.textualize import textualize_clingraph_factbase
+
 AnswerSetElement = Union[GroundAtom, tuple[GroundAtom, bool]]
 AnswerSet = tuple[AnswerSetElement, ...]
 
@@ -86,6 +88,11 @@ def visualize(file_path, tree: bool = False, create_image: bool = True) -> Factb
               "side to find the first node"
         )
     return fb
+
+
+def textualize(file_path: str):
+    fb = visualize(file_path, tree=True, create_image=False)
+    textualize_clingraph_factbase(fb)
 
 
 def ruleto64(rule_str):

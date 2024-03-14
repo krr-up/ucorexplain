@@ -13,6 +13,7 @@ from ucorexplain import (
     print_with_title,
     program_from_files,
     visualize,
+    textualize,
     save_graph,
     print_error,
 )
@@ -95,6 +96,10 @@ def main():
     if args.view_tree:
         save_graph(graph)
         visualize("./graph.lp", tree=True)
+
+    if args.text:
+        save_graph(graph)
+        textualize("./graph.lp")
 
     if args.navigate:
         # show DAG
