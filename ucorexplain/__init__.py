@@ -64,7 +64,7 @@ def print_with_title(title, value, quiet=False):
 ENCODINGS_PATH = os.path.join(".", os.path.join("ucorexplain", "encodings"))
 
 
-def visualize(file_path, tree=False) -> None:
+def visualize(file_path, tree=False) -> Factbase:
     fb = Factbase(prefix="viz_")
     ctl = Control(["--warn=none"])
     ctx = ClingraphContext()
