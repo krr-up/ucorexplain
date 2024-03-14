@@ -103,5 +103,8 @@ def get_parser() -> ArgumentParser:
         default=False,
         action="store_true",
     )
+    parser.add_argument(
+        "--text", "-t", help="View as text", default=False, action="store_true"
+    )
 
     return parser
