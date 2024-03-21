@@ -2,243 +2,142 @@
 UCOREXPLAIN
 """
 
-
-from typing import Final, Optional, Union, Sequence
+from typing import Final, Optional, Sequence, Union
 
 import clingo
 import typeguard
-from dumbo_asp.primitives import SymbolicAtom, SymbolicRule, SymbolicProgram, Model, GroundAtom
+from dumbo_asp.primitives.atoms import GroundAtom, SymbolicAtom
+from dumbo_asp.primitives.models import Model
+from dumbo_asp.primitives.predicates import Predicate
+from dumbo_asp.primitives.programs import SymbolicProgram
+from dumbo_asp.primitives.rules import SymbolicRule
 from dumbo_utils.console import console
-from rich.progress import Progress
+import base64
+
+import os
+from clingo import Control
+from clingo.script import enable_python
+from clingraph.clingo_utils import ClingraphContext  # type: ignore
+from clingraph.graphviz import compute_graphs, render  # type: ignore
+from clingraph.orm import Factbase  # type: ignore
+from clingraph.clingo_utils import add_svg_interaction, add_elements_ids
 
 AnswerSetElement = Union[GroundAtom, tuple[GroundAtom, bool]]
 AnswerSet = tuple[AnswerSetElement, ...]
 
 
-def unpack_answer_set_element(element: AnswerSetElement) -> tuple[GroundAtom, bool]:
-    if type(element) != GroundAtom:
-        return element
-    return element, True
+def path(file: str) -> str:
+    import pathlib
+
+    directory = pathlib.Path(__file__).parent.resolve() / ".."
+    return str(directory / file)
 
 
-def answer_set_element_to_string(element: AnswerSetElement) -> str:
-    if type(element) == GroundAtom:
-        element = (element, True)
-    return f"{'' if element[1] else 'not '}{element[0]}"
+def file_to_str(file: str) -> str:
+    with open(path(file)) as f:
+        return f.read()
 
 
-def move_up(answer_set: AnswerSet, *pattern: SymbolicAtom) -> AnswerSet:
-    def key(element):
-        atom, truth_value = unpack_answer_set_element(element)
-        return 0 if SymbolicAtom.of_ground_atom(atom).match(*pattern) else 1
-
-    return tuple(sorted(answer_set, key=key))
+def program_from_files(files) -> SymbolicProgram:
+    return SymbolicProgram.parse("\n".join(file_to_str(file) for file in files))
 
 
-def answer_set_to_constraints(
-        answer_set: AnswerSet,
-        query_atom: GroundAtom | tuple[GroundAtom, ...],
-        mus_predicate: str
-) -> list[SymbolicRule]:
-    """
-    Produces the sequence of selecting constraints.
-    """
-    if type(query_atom) == GroundAtom:
-        query_atom = (query_atom,)
-    query_atoms = set(query_atom)
-    query_literals = []
-    constraints = []
-    for element in answer_set:
-        atom, truth_value = unpack_answer_set_element(element)
-        if atom in query_atoms:
-            query_literals.append(answer_set_element_to_string(element))
-            query_atoms.remove(atom)
-        else:
-            constraints.append(
-                f":- not {answer_set_element_to_string(element)}, {mus_predicate}(answer_set,{len(constraints)})"
-                f"  %* Answer set *% ."
-            )
-    for atom in query_atoms:
-        query_literals.append(f"not {answer_set_element_to_string(atom)}")
-
-    return [SymbolicRule.parse(constraint) for constraint in constraints] + \
-        [SymbolicRule.parse(f"{mus_predicate} :- {', '.join(query_literals)}.")]
+def print_error(error):
+    # return
+    console.print(f"[bold red]{error}:[/bold red]")
 
 
-def build_extended_program_and_selectors(
-        program: SymbolicProgram,
-        answer_set: AnswerSet,
-        query_atom: GroundAtom | tuple[GroundAtom, ...],
-        mus_predicate: str
-) -> tuple[SymbolicProgram, list[GroundAtom]]:
-    rules = [rule.with_extended_body(SymbolicAtom.parse(f"{mus_predicate}(program,{index})"))
-             for index, rule in enumerate(program)]
-
-    constraints = answer_set_to_constraints(answer_set, query_atom, mus_predicate)
-    extended_program = SymbolicProgram.of(rules, constraints, SymbolicRule.parse(
-        "{" +
-        f"{mus_predicate}(program,0..{len(rules) - 1})" +
-        (f"; {mus_predicate}(answer_set,0..{len(constraints) - 2})" if len(constraints) > 1 else "") +
-        "}."
-    ))
-    selectors = [GroundAtom.parse(f"{mus_predicate}(program,{index})") for index in range(len(rules))] + \
-        [GroundAtom.parse(f"{mus_predicate}(answer_set,{index})") for index in range(len(constraints) - 1)]
-    return extended_program, selectors
-
-
-def build_control_and_maps(
-        extended_program: SymbolicProgram,
-        mus_predicate: str,
-):
-    control = clingo.Control()
-    control.add(str(extended_program))
-    control.ground([("base", [])])
-    selector_to_literal = {}
-    literal_to_selector = {}
-    for atom in control.symbolic_atoms.by_signature(mus_predicate, 2):
-        selector = GroundAtom.parse(str(atom.symbol))
-        selector_to_literal[selector] = atom.literal
-        literal_to_selector[atom.literal] = selector
-
-    counter = 0
-    for atom in control.symbolic_atoms.by_signature(mus_predicate, 0):
-        assert counter == 0
-        counter += 1
-
-        class Stopper(clingo.Propagator):
-            def init(self, init):
-                program_literal = init.symbolic_atoms[clingo.Function(mus_predicate)].literal
-                solver_literal = init.solver_literal(program_literal)
-                init.add_watch(solver_literal)
-
-            def propagate(self, ctl: clingo.PropagateControl, changes: Sequence[int]) -> None:
-                assert len(changes) == 1
-                ctl.add_clause(clause=[-changes[0]], tag=True)
-
-        control.register_propagator(Stopper())
-
-    return control, selector_to_literal, literal_to_selector
-
-
-def check(
-        control: clingo.Control,
-        with_selectors: list[GroundAtom],
-        selector_to_literal: dict[GroundAtom, int],
-        literal_to_selector: dict[int, GroundAtom],
-) -> Optional[list[GroundAtom]]:
-    def on_core(core):
-        on_core.res = core
-    on_core.res = []
-
-    control.solve(assumptions=[selector_to_literal[selector] for selector in with_selectors] + [-1],
-                  on_core=on_core)
-
-    if on_core.res is not None and (len(on_core.res) == 0 or on_core.res[-1] != -1):
-        return [literal_to_selector[literal] for literal in on_core.res]
-
-
-@typeguard.typechecked
-def explain(
-    program: SymbolicProgram,
-    answer_set: AnswerSet,
-    query_atom: GroundAtom | tuple[GroundAtom, ...],
-) -> Optional[SymbolicProgram]:
-    mus_predicate: Final = f"__mus__"
-
-    extended_program, selectors = build_extended_program_and_selectors(
-        program, answer_set, query_atom, mus_predicate
-    )
-    console.print("[bold blue]-----------------[/bold blue]")
-    console.print(f"[bold blue]Extended program:[/bold blue]")
-    for line in extended_program:
-        console.print(f"{line}")
-    console.print("[bold blue]-----------------[/bold blue]")
-
-    control, selector_to_literal, literal_to_selector = build_control_and_maps(extended_program, mus_predicate)
-
-    console.log(f"Initial check with {len(selectors)} selectors...")
-    result = check(
-        control=control,
-        with_selectors=selectors,
-        literal_to_selector=literal_to_selector,
-        selector_to_literal=selector_to_literal
-    )
-    if result is None:
-        console.log(f"  It's a free choice. Stop!")
+def print_with_title(title, value, quiet=False):
+    # return
+    if quiet:
         return
-    console.log(f"  Shrink to {len(result)} selectors!")
-    selectors = result
+    console.print(f"[bold red]{title}:[/bold red]")
 
-    with Progress(console=console, transient=True) as progress:
-        task = progress.add_task("Searching MUS...", total=len(selectors))
-        required_selectors = 0
-
-        while required_selectors < len(selectors):
-            console.log(f"Flag {selectors[-1]} as required!")
-            required_selectors += 1
-            selectors.insert(0, selectors.pop())  # last selector is required... move it ahead
-            console.log(f"Check with {len(selectors)} selectors...")
-            result = check(
-                control=control,
-                with_selectors=selectors,
-                literal_to_selector=literal_to_selector,
-                selector_to_literal=selector_to_literal
-            )
-            assert result is not None
-            console.log(f"  Shrink to {len(result)} selectors!")
-            progress.update(task, advance=len(selectors) - len(result))
-            selectors = result
-
-    console.log(f"Terminate with {len(selectors)} selectors!")
-
-    def selector_to_rule(selector):
-        return program[selector.arguments[1].number] if selector.arguments[0].name == 'program' else \
-            answer_set_element_to_string(selector_to_rule.answer_set[selector.arguments[1].number])
-    selector_to_rule.answer_set = [
-        element for element in answer_set
-        if unpack_answer_set_element(element)[0] not in (
-            [query_atom] if type(query_atom) is GroundAtom else query_atom
-        )
-    ]
-
-    selectors_program = '\n'.join(f"{selector}.  %* {selector_to_rule(selector)} *%" for selector in selectors)
-    return SymbolicProgram.parse(f"{extended_program}\n%* the selectors causing the inference *%\n{selectors_program}")
-
-
-@typeguard.typechecked
-def print_output(
-        query_atom: GroundAtom,
-        result: SymbolicProgram,
-):
-    console.print("[bold red]Explanation:[/bold red]")
-    if result is not None:
-        console.print(f"% {query_atom} is explained by")
-        console.print(f"{result}")
+    if type(value) is list:
+        for e in value:
+            console.print(f"{e}")
     else:
-        console.print(f"% {query_atom} is a free choice")
+        console.print(f"{value}")
+    console.print(f"[bold red]-------------[/bold red]")
 
 
-# def print_program(sudoku_instance: str):
-#     instance = [line.strip() for line in sudoku_instance.strip().split('\n')]
-#     given = []
-#     for row, row_line in enumerate(instance, start=1):
-#         for col, value in enumerate(row_line, start=1):
-#             if value != '.':
-#                 given.append(f"given(({row}, {col}), {value}).")
+ENCODINGS_PATH = os.path.join(".", os.path.join("ucorexplain", "encodings"))
 
-#     sub_blocks = []
-#     for row in range(3):
-#         for col in range(3):
-#             sub_blocks.append(
-#                 f"block((sub, {row}, {col}), (Row, Col)) :- Row = {row * 3 + 1}..{(row + 1) * 3}; Col = {col * 3 + 1}..{(col + 1) * 3}.")
 
-#     program = SymbolicProgram.parse("""
-#     {assign((Row, Col), Value) : Value = 1..9} = 1 :- Row = 1..9; Col = 1..9.
-#     :- block(Block, Cell); block(Block, Cell'), Cell != Cell'; assign(Cell, Value), assign(Cell', Value).
-#     :- given(Cell, Value), not assign(Cell, Value).
-#     """ + '\n'.join(f"block((row, {row + 1}), ({row + 1}, Col)) :- Col = 1..9." for row in range(9)) + """
-#     """ + '\n'.join(f"block((col, {col + 1}), (Row, {col + 1})) :- Row = 1..9." for col in range(9)) + """
-#     """ + '\n'.join(sub_blocks) + """
-#     block((sub, (Row-1) / 3, (Col-1) / 3), (Row, Col)) :- Row = 1..9; Col = 1..9.
-#         """ + '\n'.join(given))
-#     print(program)
+def visualize(file_path, tree=False) -> None:
+    fb = Factbase(prefix="viz_")
+    ctl = Control(["--warn=none"])
+    ctx = ClingraphContext()
+    add_elements_ids(ctl)
+    ctl.load(file_path)
+    if tree:
+        ctl.load(os.path.join(ENCODINGS_PATH, "clingraph_tree.lp"))
+    else:
+        ctl.load(os.path.join(ENCODINGS_PATH, "clingraph_simple.lp"))
+    enable_python()
+
+    ctl.ground([("base", [])], context=ctx)
+    ctl.solve(on_model=fb.add_model)
+    graphs = compute_graphs(fb, graphviz_type="digraph")
+    path_png = render(graphs, format="png")
+    print("PNG Image saved in: " + path_png["default"])
+    paths = render(graphs, view=True, format="svg")
+    add_svg_interaction([paths])
+    print(
+        "SVG Image saved in: "
+        + paths["default"]
+        + "      Click on the nodes to expand! If your browser is opening empty, you might have to scroll to the side to find the first node"
+    )
+    return fb
+
+
+def ruleto64(rule_str):
+    s = str(rule_str).strip('"')
+    r = SymbolicRule.parse(s)
+    r = r.with_chopped_body(
+        with_backward_search=True, backward_search_symbols=(";", " :-")
+    )
+    encoded = base64.b64encode(str(r).encode("ascii"))
+    return encoded
+
+
+def save_graph(graph):
+    with open("graph.lp", "wb") as file_to_save:
+        for a in graph:
+
+            if a.predicate_name == "node":
+                if str(a.arguments[0]).strip('"') == "None":
+                    continue
+                file_to_save.write((a.predicate_name).encode())
+                file_to_save.write(
+                    "({}".format(
+                        ",".join([str(a).strip('"') for a in a.arguments[:-1]])
+                    ).encode()
+                )
+                t = a.arguments[-1].arguments
+                file_to_save.write(", (".encode())
+                file_to_save.write(str(t[0]).encode())
+                if len(t) > 1:
+                    file_to_save.write(', "'.encode())
+                    s = ruleto64(str(t[1]))
+                    file_to_save.write(s)
+                    file_to_save.write('"'.encode())
+                    if len(t) == 3:
+                        file_to_save.write(",".encode())
+                        file_to_save.write(str(t[2]).encode())
+                file_to_save.write(")".encode())
+            if a.predicate_name == "link":
+                if str(a.arguments[1]).strip('"') == "None":
+                    continue
+                file_to_save.write((a.predicate_name).encode())
+                file_to_save.write(
+                    "({}".format(
+                        ",".join([str(a).strip('"') for a in a.arguments[:-1]])
+                    ).encode()
+                )
+                s = ruleto64(str(a.arguments[-1]))
+                file_to_save.write(', "'.encode())
+                file_to_save.write(s)
+                file_to_save.write('"'.encode())
+
+            file_to_save.write(").\n".encode())
