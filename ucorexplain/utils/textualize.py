@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Tuple
 
+import clingo
+import clorm.orm.core
 from clingraph import Factbase
 
 
@@ -27,16 +29,20 @@ def split_tuple_string(string: str) -> Tuple[str, str]:
 
 @dataclass
 class TextNode:
-    parent: str
     name: str
     reason: str
     rule: str
 
 
-def expand_node(node: str, edges):
+def expand_node(node: str, edges, associated_reasons, associated_rules):
+    node_object = TextNode(
+        name=node,
+        reason=associated_reasons.get(node),
+        rule=associated_rules.get(node),
+    )
     if node in edges:
-        return [node, *[expand_node(edge, edges) for edge in edges[node]]]
-    return [node]
+        return [node_object, *[expand_node(edge, edges, associated_reasons, associated_rules) for edge in edges[node]]]
+    return [node_object]
 
 
 def print_nested(nested_list, level=0):
@@ -44,7 +50,7 @@ def print_nested(nested_list, level=0):
         if isinstance(elem, list):
             print_nested(elem, level + 1)
         else:
-            print(level * "-" + elem)
+            print(level * "-" + str(elem))
 
 
 def textualize_clingraph_factbase(factbase: Factbase) -> None:
@@ -70,5 +76,24 @@ def textualize_clingraph_factbase(factbase: Factbase) -> None:
         else:
             edges[parent] = {node}
     # -----
-    nested = expand_node("root", edges)
+    print(factbase)
+    print("-" * 60)
+    reasons = clorm_fb.query(factbase.Attr).where(
+        factbase.Attr.element_type == "node",
+        factbase.Attr.attr_id[0] == "label",
+        factbase.Attr.attr_id[1] == clorm.orm.core.Raw(clingo.parse_term("reason")),
+    ).select(factbase.Attr.element_id, factbase.Attr.attr_value).all()
+    rules = clorm_fb.query(factbase.Attr).where(
+        factbase.Attr.element_type == "node",
+        factbase.Attr.attr_id[0] == "label",
+        factbase.Attr.attr_id[1] == clorm.orm.core.Raw(clingo.parse_term("rule")),
+    ).select(factbase.Attr.element_id, factbase.Attr.attr_value).all()
+    print(node_lookup)
+    reasons = {node_lookup[str(node)]: reason for node, reason in reasons}
+    rules = {node_lookup[str(node)]: rule for node, rule in rules}
+    print("REASONS", reasons)
+    print("RULES", rules)
+    print("-" * 60)
+    # -----
+    nested = expand_node("root", edges, reasons, rules)
     print_nested(nested)
