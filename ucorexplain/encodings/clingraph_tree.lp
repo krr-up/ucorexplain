@@ -19,10 +19,10 @@ node_rule(X,""):-node(X,_,(_)), not node(X,_,(_,_)), not node(X,_,(_,_,_)).
 node_reason(X,"Support"):-node(X,_,(support,_)), not fact(X).
 node_reason(X,"Fact"):-node(X,_,(support,_)), fact(X).
 node_reason(X,"Assumption"):-node(X,_,(assumption)).
-node_reason(X,"Uper bound was already reacheded"):-node(X,_,(head_upper_bound,_)).
+node_reason(X,"Upper bound was already reacheded"):-node(X,_,(head_upper_bound,_)).
 node_reason(X,"No rule can support"):-node(X,_,(lack_of_support,)).
 node_reason(X,@concat("No other rule can support ", A)):-node(X,_,(last_support,_,A)).
-node_reason(X,"Avoid satisfing constraint"):-node(X,_,(constraint,_,_)).
+node_reason(X,"Avoid violation of rule"):-node(X,_,(constraint,_,_)).
 
 #const red = "#F6B0B0".
 #const green = "#BFFEBF".
