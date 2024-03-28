@@ -19,6 +19,8 @@ from ucorexplain import (
 )
 from .utils.parser import get_parser
 
+
+AUTO_EXPAND_DEPTH = 2
 old_stdout = sys.stdout
 
 
@@ -99,7 +101,11 @@ def main():
 
     if args.text:
         save_graph(graph)
-        textualize("./graph.lp")
+        try:
+            depth = int(args.expand_depth)
+        except ValueError:
+            depth = AUTO_EXPAND_DEPTH
+        textualize("./graph.lp", depth)
 
     if args.navigate:
         # show DAG

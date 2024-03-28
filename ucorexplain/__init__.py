@@ -90,9 +90,9 @@ def visualize(file_path, tree: bool = False, create_image: bool = True) -> Factb
     return fb
 
 
-def textualize(file_path: str):
+def textualize(file_path: str, expand_depth: int):
     fb = visualize(file_path, tree=True, create_image=False)
-    textualize_clingraph_factbase(fb)
+    textualize_clingraph_factbase(fb, expand_depth)
 
 
 def ruleto64(rule_str):
