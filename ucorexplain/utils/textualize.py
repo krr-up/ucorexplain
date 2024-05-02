@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple, List
-from pathlib import Path
+from typing import Tuple, List, Optional
 
 import clingo
 import clorm.orm.core
@@ -8,7 +7,10 @@ from clingraph import Factbase
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Tree
 from textual.widgets.tree import TreeNode
-from rich.text import Text
+
+
+REASON_STRING_LACK_OF_SUPPORT = "No rule can support"
+
 
 def split_tuple_string(string: str) -> Tuple[str, str]:
     level = 0
@@ -36,16 +38,42 @@ class TextNode:
     name: str
     reason: str
     rule: str
+    incoming_rule: Optional[str] = None
 
 
-def expand_node(node: str, edges, associated_reasons, associated_rules):
+def expand_node(
+    node: str,
+    edges,
+    associated_reasons,
+    associated_rules,
+    incoming_rules,
+    has_incoming_rule=False,
+):
+    reason = associated_reasons.get(node)
+    rule = associated_rules.get(node)
     node_object = TextNode(
         name=node,
-        reason=associated_reasons.get(node),
-        rule=associated_rules.get(node),
+        reason=reason,
+        rule=rule,
     )
+    has_incoming = str(reason).replace('"', "") == REASON_STRING_LACK_OF_SUPPORT
+    if has_incoming_rule:
+        node_object.incoming_rule = str(incoming_rules.get(node)).replace('"', "")
     if node in edges:
-        return [node_object, *[expand_node(edge, edges, associated_reasons, associated_rules) for edge in edges[node]]]
+        return [
+            node_object,
+            *[
+                expand_node(
+                    edge,
+                    edges,
+                    associated_reasons,
+                    associated_rules,
+                    incoming_rules,
+                    has_incoming_rule=has_incoming,
+                )
+                for edge in edges[node]
+            ],
+        ]
     return [node_object]
 
 
@@ -80,20 +108,44 @@ def textualize_clingraph_factbase(factbase: Factbase, expand_depth: int) -> None
         else:
             edges[parent] = {node}
     # -----
-    reasons = clorm_fb.query(factbase.Attr).where(
-        factbase.Attr.element_type == "node",
-        factbase.Attr.attr_id[0] == "label",
-        factbase.Attr.attr_id[1] == clorm.orm.core.Raw(clingo.parse_term("reason")),
-    ).select(factbase.Attr.element_id, factbase.Attr.attr_value).all()
-    rules = clorm_fb.query(factbase.Attr).where(
-        factbase.Attr.element_type == "node",
-        factbase.Attr.attr_id[0] == "label",
-        factbase.Attr.attr_id[1] == clorm.orm.core.Raw(clingo.parse_term("rule")),
-    ).select(factbase.Attr.element_id, factbase.Attr.attr_value).all()
+    reasons = (
+        clorm_fb.query(factbase.Attr)
+        .where(
+            factbase.Attr.element_type == "node",
+            factbase.Attr.attr_id[0] == "label",
+            factbase.Attr.attr_id[1] == clorm.orm.core.Raw(clingo.parse_term("reason")),
+        )
+        .select(factbase.Attr.element_id, factbase.Attr.attr_value)
+        .all()
+    )
+    rules = (
+        clorm_fb.query(factbase.Attr)
+        .where(
+            factbase.Attr.element_type == "node",
+            factbase.Attr.attr_id[0] == "label",
+            factbase.Attr.attr_id[1] == clorm.orm.core.Raw(clingo.parse_term("rule")),
+        )
+        .select(factbase.Attr.element_id, factbase.Attr.attr_value)
+        .all()
+    )
+    edge_rules = (
+        clorm_fb.query(factbase.Attr)
+        .where(
+            factbase.Attr.element_type == "edge",
+            factbase.Attr.attr_id[0] == "label",
+            factbase.Attr.attr_id[1] == clorm.orm.core.Raw(clingo.parse_term("rule")),
+        )
+        .select(factbase.Attr.element_id, factbase.Attr.attr_value)
+        .all()
+    )
+    incoming_rules = {
+        split_tuple_string(split_tuple_string(str(edge))[1])[0]: incoming_rule
+        for edge, incoming_rule in edge_rules
+    }
     reasons = {node_lookup[str(node)]: reason for node, reason in reasons}
     rules = {node_lookup[str(node)]: rule for node, rule in rules}
     # -----
-    nested = expand_node("root", edges, reasons, rules)
+    nested = expand_node("root", edges, reasons, rules, incoming_rules)
 
     app = TextTreeApp(nested, expand_depth=expand_depth)
     app.run()
@@ -102,8 +154,7 @@ def textualize_clingraph_factbase(factbase: Factbase, expand_depth: int) -> None
 class TextTreeApp(App):
     """A textual app to show the explanation forrest in an interactive tree view in the terminal"""
 
-    BINDINGS = [("d", "toggle_dark", "Toggle dark mode"),
-                ("x", "exit", "Exit")]
+    BINDINGS = [("d", "toggle_dark", "Toggle dark mode"), ("x", "exit", "Exit")]
 
     def __init__(self, data: List, expand_depth: int):
         super(TextTreeApp, self).__init__()
@@ -119,26 +170,37 @@ class TextTreeApp(App):
         yield t
 
     @staticmethod
-    def build_tree(node: TreeNode, nested_list: List, level: int = 0, auto_expand_level: int = 2) -> None:
+    def build_tree(
+        node: TreeNode, nested_list: List, level: int = 0, auto_expand_level: int = 2
+    ) -> None:
         new_node = None
         for elem in nested_list:
             if isinstance(elem, list):
-                TextTreeApp.build_tree(new_node, elem, level + 1, auto_expand_level=auto_expand_level)
+                TextTreeApp.build_tree(
+                    new_node, elem, level + 1, auto_expand_level=auto_expand_level
+                )
             else:
                 if elem.name == "root":
                     # skip root node
                     new_node = node
                 else:
-                    new_node = node.add(elem.name)
+                    node_title = elem.name
+                    if elem.incoming_rule is not None:
+                        node_title += f" ({elem.incoming_rule})"
+                    new_node = node.add(node_title)
+                    new_node.label.stylize("#888888", len(elem.name) + 1)
+
                     if level <= auto_expand_level:
                         new_node.expand()
                     reason_string = str(elem.reason).replace('"', "")
+                    is_lack_of_support = reason_string == REASON_STRING_LACK_OF_SUPPORT
                     rule_string = str(elem.rule).replace('"', "")
                     reason = new_node.add_leaf(f"Reason: {reason_string}")
-                    rule = new_node.add_leaf(f"Rule: {rule_string}")
                     reason.label.stylize("bold #0087D7", 0, 7)
-                    rule.label.stylize("bold #0087D7", 0, 5)
-                    rule.label.stylize("#888888", 6)
+                    if not is_lack_of_support:
+                        rule = new_node.add_leaf(f"Rule: {rule_string}")
+                        rule.label.stylize("bold #0087D7", 0, 5)
+                        rule.label.stylize("#888888", 6)
 
     def action_exit(self):
         self.exit()
