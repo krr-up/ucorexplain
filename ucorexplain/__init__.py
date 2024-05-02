@@ -1,26 +1,23 @@
 """
 UCOREXPLAIN
 """
+import os
+from typing import Union
 
-from typing import Final, Optional, Sequence, Union
-
-import clingo
-import typeguard
-from dumbo_asp.primitives.atoms import GroundAtom, SymbolicAtom
-from dumbo_asp.primitives.models import Model
-from dumbo_asp.primitives.predicates import Predicate
+from dumbo_asp.primitives.atoms import GroundAtom
 from dumbo_asp.primitives.programs import SymbolicProgram
 from dumbo_asp.primitives.rules import SymbolicRule
 from dumbo_utils.console import console
 import base64
 
-import os
 from clingo import Control
 from clingo.script import enable_python
 from clingraph.clingo_utils import ClingraphContext  # type: ignore
 from clingraph.graphviz import compute_graphs, render  # type: ignore
 from clingraph.orm import Factbase  # type: ignore
 from clingraph.clingo_utils import add_svg_interaction, add_elements_ids
+
+from .utils.textualize import textualize_clingraph_factbase
 
 AnswerSetElement = Union[GroundAtom, tuple[GroundAtom, bool]]
 AnswerSet = tuple[AnswerSetElement, ...]
@@ -64,7 +61,7 @@ def print_with_title(title, value, quiet=False):
 ENCODINGS_PATH = os.path.join(".", os.path.join("ucorexplain", "encodings"))
 
 
-def visualize(file_path, tree=False) -> None:
+def visualize(file_path, tree: bool = False, create_image: bool = True) -> Factbase:
     fb = Factbase(prefix="viz_")
     ctl = Control(["--warn=none"])
     ctx = ClingraphContext()
@@ -79,16 +76,23 @@ def visualize(file_path, tree=False) -> None:
     ctl.ground([("base", [])], context=ctx)
     ctl.solve(on_model=fb.add_model)
     graphs = compute_graphs(fb, graphviz_type="digraph")
-    path_png = render(graphs, format="png")
-    print("PNG Image saved in: " + path_png["default"])
-    paths = render(graphs, view=True, format="svg")
-    add_svg_interaction([paths])
-    print(
-        "SVG Image saved in: "
-        + paths["default"]
-        + "      Click on the nodes to expand! If your browser is opening empty, you might have to scroll to the side to find the first node"
-    )
+    if create_image:
+        path_png = render(graphs, format="png")
+        print("PNG Image saved in: " + path_png["default"])
+        paths = render(graphs, view=True, format="svg")
+        add_svg_interaction([paths])
+        print(
+            "SVG Image saved in: "
+            + paths["default"]
+            + "      Click on the nodes to expand! If your browser is opening empty, you might have to scroll to the "
+              "side to find the first node"
+        )
     return fb
+
+
+def textualize(file_path: str, expand_depth: int):
+    fb = visualize(file_path, tree=True, create_image=False)
+    textualize_clingraph_factbase(fb, expand_depth)
 
 
 def ruleto64(rule_str):

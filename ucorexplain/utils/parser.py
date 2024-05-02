@@ -103,5 +103,14 @@ def get_parser() -> ArgumentParser:
         default=False,
         action="store_true",
     )
+    parser.add_argument(
+        "--text", "-t", help="View as text", default=False, action="store_true"
+    )
+    parser.add_argument(
+        "--expand_depth",
+        "-e",
+        help="Sets the automatic expand depth for the --text mode",
+        default="",
+    )
 
     return parser
