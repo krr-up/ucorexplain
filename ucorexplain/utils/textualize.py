@@ -7,9 +7,11 @@ from clingraph import Factbase
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Tree
 from textual.widgets.tree import TreeNode
+from rich.style import Style
 
 
 REASON_STRING_LACK_OF_SUPPORT = "No rule can support"
+COLOR_MAP = {"#609E60": "#2E7D32", "#F6B0B0": "#D32F2F"}
 
 
 def split_tuple_string(string: str) -> Tuple[str, str]:
@@ -38,6 +40,7 @@ class TextNode:
     name: str
     reason: str
     rule: str
+    color: str
     incoming_rule: Optional[str] = None
 
 
@@ -47,14 +50,19 @@ def expand_node(
     associated_reasons,
     associated_rules,
     incoming_rules,
+    node_colors,
     has_incoming_rule=False,
 ):
     reason = associated_reasons.get(node)
     rule = associated_rules.get(node)
+    color = str(node_colors.get(node)).replace('"', "")
+    if color in COLOR_MAP:
+        color = COLOR_MAP[color]
     node_object = TextNode(
         name=node,
         reason=reason,
         rule=rule,
+        color=color,
     )
     has_incoming = str(reason).replace('"', "") == REASON_STRING_LACK_OF_SUPPORT
     if has_incoming_rule:
@@ -69,6 +77,7 @@ def expand_node(
                     associated_reasons,
                     associated_rules,
                     incoming_rules,
+                    node_colors,
                     has_incoming_rule=has_incoming,
                 )
                 for edge in edges[node]
@@ -89,6 +98,8 @@ def textualize_clingraph_factbase(factbase: Factbase, expand_depth: int) -> None
     clorm_fb = factbase.fb
     fb_nodes = list(clorm_fb.query(factbase.Node).all())
     fb_edges = list(clorm_fb.query(factbase.Edge).all())
+    print("-" * 50)
+    print(fb_nodes)
     edges = {}
     node_lookup = {}
     for n in fb_nodes:
@@ -142,10 +153,20 @@ def textualize_clingraph_factbase(factbase: Factbase, expand_depth: int) -> None
         split_tuple_string(split_tuple_string(str(edge))[1])[0]: incoming_rule
         for edge, incoming_rule in edge_rules
     }
+    node_color = (
+        clorm_fb.query(factbase.Attr)
+        .where(
+            factbase.Attr.element_type == "node",
+            factbase.Attr.attr_id[0] == "fillcolor",
+        )
+        .select(factbase.Attr.element_id, factbase.Attr.attr_value)
+        .all()
+    )
+    node_colors = {node_lookup[str(node)]: color for node, color in node_color}
     reasons = {node_lookup[str(node)]: reason for node, reason in reasons}
     rules = {node_lookup[str(node)]: rule for node, rule in rules}
     # -----
-    nested = expand_node("root", edges, reasons, rules, incoming_rules)
+    nested = expand_node("root", edges, reasons, rules, incoming_rules, node_colors)
 
     app = TextTreeApp(nested, expand_depth=expand_depth)
     app.run()
@@ -184,11 +205,16 @@ class TextTreeApp(App):
                     # skip root node
                     new_node = node
                 else:
-                    node_title = elem.name
+                    node_title = f" {elem.name} "
                     if elem.incoming_rule is not None:
                         node_title += f" ({elem.incoming_rule})"
                     new_node = node.add(node_title)
-                    new_node.label.stylize("#888888", len(elem.name) + 1)
+                    new_node.label.stylize(
+                        Style(bgcolor=str(elem.color)),
+                        0,
+                        len(elem.name) + 2,
+                    )
+                    new_node.label.stylize("#888888", len(elem.name) + 3)
 
                     if level <= auto_expand_level:
                         new_node.expand()
